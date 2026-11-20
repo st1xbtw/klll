@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import threading
 import time
@@ -49,20 +50,34 @@ def create_project(source: str, source_kind: str, content_type: str, options: di
     return proj
 
 
+def _replace_with_retry(src: Path, dst: Path) -> None:
+    """Windows не даёт заменить файл, пока антивирус или другой поток держит его открытым.
+    Повторяем замену с нарастающей паузой."""
+    for attempt in range(50):
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError:
+            if attempt == 49:
+                raise
+            time.sleep(min(0.02 * (attempt + 1), 0.25))
+
+
 def save_project(proj: dict) -> None:
     proj["updated"] = time.time()
     path = _meta_path(proj["id"])
     tmp = path.with_suffix(".tmp")
     with _lock:
         tmp.write_text(json.dumps(proj, ensure_ascii=False, indent=2), encoding="utf-8")
-        tmp.replace(path)
+        _replace_with_retry(tmp, path)
 
 
 def load_project(pid: str) -> dict:
     path = _meta_path(pid)
-    if not path.exists():
-        raise FileNotFoundError(pid)
-    return json.loads(path.read_text(encoding="utf-8"))
+    with _lock:
+        if not path.exists():
+            raise FileNotFoundError(pid)
+        return json.loads(path.read_text(encoding="utf-8"))
 
 
 def list_projects() -> list[dict]:
@@ -72,7 +87,8 @@ def list_projects() -> list[dict]:
     for d in config.PROJECTS_DIR.iterdir():
         if (d / "project.json").exists():
             try:
-                p = json.loads((d / "project.json").read_text(encoding="utf-8"))
+                with _lock:
+                    p = json.loads((d / "project.json").read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
                 continue
             items.append({k: p.get(k) for k in (
