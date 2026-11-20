@@ -44,7 +44,19 @@ def serve(port: int) -> uvicorn.Server:
     return server
 
 
+def _ensure_std_streams() -> None:
+    """В оконной сборке PyInstaller (console=False) sys.stdout/sys.stderr равны None.
+    Тогда любой print или лог uvicorn роняет процесс. Пишем вывод в harness.log в папке данных."""
+    if sys.stdout is None or sys.stderr is None:
+        log = open(config.DATA_DIR / "harness.log", "a", encoding="utf-8", buffering=1)
+        if sys.stdout is None:
+            sys.stdout = log
+        if sys.stderr is None:
+            sys.stderr = log
+
+
 def main(argv: list[str] | None = None) -> int:
+    _ensure_std_streams()
     ap = argparse.ArgumentParser(description=config.APP_NAME)
     ap.add_argument("--browser", action="store_true", help="открыть в браузере")
     ap.add_argument("--server", action="store_true", help="только сервер")

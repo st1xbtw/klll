@@ -52,7 +52,11 @@ jobs:
             } catch {}
           }
           Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
-          if (-not $ok) { throw "Сервер не ответил" }
+          if (-not $ok) {
+            Write-Host "--- harness.log ---"
+            Get-Content "$env:RUNNER_TEMP\hc_data\harness.log" -ErrorAction SilentlyContinue
+            throw "Сервер не ответил"
+          }
           if ($meta.ffmpeg -like "ОШИБКА*") { throw "ffmpeg не найден: $($meta.ffmpeg)" }
           Write-Host "OK: $($meta.name) $($meta.version), ffmpeg: $($meta.ffmpeg)"
 
