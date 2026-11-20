@@ -1,0 +1,62 @@
+name: build-windows
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pyinstaller
+
+      - name: "Fetch ffmpeg and ffprobe (Windows static build)"
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path bin, _ffmpeg | Out-Null
+          Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile _ffmpeg/ffmpeg.zip
+          Expand-Archive -Path _ffmpeg/ffmpeg.zip -DestinationPath _ffmpeg -Force
+          $bin = Get-ChildItem -Path _ffmpeg -Recurse -Directory -Filter bin | Select-Object -First 1
+          Copy-Item "$($bin.FullName)\ffmpeg.exe", "$($bin.FullName)\ffprobe.exe" -Destination bin
+          & bin\ffmpeg.exe -version | Select-Object -First 1
+
+      - name: Build HarnessCloud.exe
+        run: python -m PyInstaller --noconfirm harness-cloud.spec
+
+      - name: "Smoke test - server starts and reports ffmpeg"
+        shell: pwsh
+        run: |
+          $env:HARNESS_DATA_DIR = "$env:RUNNER_TEMP\hc_data"
+          $p = Start-Process -FilePath "dist\HarnessCloud\HarnessCloud.exe" -ArgumentList "--server","--port","8765" -PassThru -WindowStyle Hidden
+          $ok = $false
+          for ($i = 0; $i -lt 60; $i++) {
+            Start-Sleep -Seconds 2
+            try {
+              $meta = Invoke-RestMethod -Uri "http://127.0.0.1:8765/api/meta" -TimeoutSec 5
+              $ok = $true
+              break
+            } catch {}
+          }
+          Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          if (-not $ok) { throw "Сервер не ответил" }
+          if ($meta.ffmpeg -like "ОШИБКА*") { throw "ffmpeg не найден: $($meta.ffmpeg)" }
+          Write-Host "OK: $($meta.name) $($meta.version), ffmpeg: $($meta.ffmpeg)"
+
+      - name: Package
+        shell: pwsh
+        run: Compress-Archive -Path dist\HarnessCloud -DestinationPath HarnessCloud-windows.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HarnessCloud-windows
+          path: HarnessCloud-windows.zip
