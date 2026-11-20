@@ -306,3 +306,23 @@ kbd { padding: 2px 7px; border-radius: 7px; border: 1px solid var(--stroke); bac
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ---- Платформы: вкладки TikTok / Shorts / Reels ---- */
+.ptabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.ptab {
+  appearance: none; border: 1px solid var(--stroke-soft); background: var(--chip); color: var(--text-2);
+  padding: 5px 12px; border-radius: 999px; font: inherit; font-size: 12px; cursor: pointer;
+  transition: background 160ms var(--ease), color 160ms var(--ease);
+}
+.ptab.active { background: var(--accent-grad); color: #fff; border-color: transparent; }
+.desc-text { white-space: pre-line; }
+
+/* ---- Ручная правка клипа ---- */
+.manual { display: flex; flex-direction: column; gap: 8px; padding-top: 6px; border-top: 1px solid var(--stroke-soft); }
+.cut-row { display: flex; gap: 8px; }
+.field-sm { display: flex; flex-direction: column; gap: 4px; flex: 1; font-size: 11.5px; color: var(--text-2); }
+.input-sm { padding: 6px 9px; font-size: 12.5px; }
+.select-sm { padding: 6px 9px; font-size: 12.5px; }
+.manual .btn-sm { width: 100%; justify-content: center; }
+.manual .btn:disabled { opacity: .45; cursor: not-allowed; }
+.phone { transition: aspect-ratio 200ms var(--ease); }

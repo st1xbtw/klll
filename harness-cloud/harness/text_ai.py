@@ -65,3 +65,60 @@ def describe(clip_text: str, hook: str, content_type: str) -> dict:
     if top:
         desc = f"{desc}. Про: {', '.join(top[:3])}."
     return {"description": desc, "hashtags": tags}
+
+
+# ---------- варианты под платформы ----------
+
+PLATFORM_LIMITS = {
+    # TikTok: короткая подпись и 3–5 хештегов, видна первая строка.
+    "tiktok": {"title": None, "text": 150, "tags": 5},
+    # YouTube Shorts: заголовок до 70 символов, описание до 200, 3 хештега (#shorts обязателен).
+    "shorts": {"title": 70, "text": 200, "tags": 3},
+    # Instagram Reels: до 125 символов видны без нажатия «ещё», 5 хештегов.
+    "reels": {"title": None, "text": 125, "tags": 5},
+}
+
+
+def _cut_words(text: str, limit: int) -> str:
+    """Обрезка по словам без разрыва слова, с многоточием при необходимости."""
+    text = " ".join(text.split())
+    if len(text) <= limit:
+        return text
+    cut = text[: limit - 1].rsplit(" ", 1)[0].rstrip(" ,.;:-")
+    return (cut or text[: limit - 1]) + "…"
+
+
+def _tags(content_type: str, clip_text: str, n: int, must: list[str]) -> list[str]:
+    base = {"game": ["#gaming", "#стрим", "#игры"],
+            "podcast": ["#подкаст", "#интервью"]}.get(content_type, [])
+    topics = describe(clip_text, "", content_type)["hashtags"]
+    platform_tags = {"#shorts", "#reels", "#tiktok"}
+    topics = [t for t in topics if t not in base and t not in platform_tags]
+    tags = list(dict.fromkeys(must + base + topics))
+    return tags[:n]
+
+
+def describe_platforms(clip_text: str, hook: str, content_type: str) -> dict:
+    """Тексты и хештеги под TikTok, YouTube Shorts и Instagram Reels по лимитам каждой платформы."""
+    base_desc = hook or clip_text[:200]
+    topics = describe(clip_text, hook, content_type)["hashtags"]
+    out = {}
+    lim = PLATFORM_LIMITS["tiktok"]
+    out["tiktok"] = {
+        "text": _cut_words(base_desc, lim["text"]),
+        "hashtags": _tags(content_type, clip_text, lim["tags"], ["#tiktok"]),
+    }
+    lim = PLATFORM_LIMITS["shorts"]
+    title = _cut_words(hook or (clip_text[:lim["title"]] or "Лучший момент"), lim["title"])
+    body = _cut_words(clip_text or hook, lim["text"])
+    out["shorts"] = {
+        "title": title,
+        "text": body,
+        "hashtags": _tags(content_type, clip_text, lim["tags"], ["#shorts"]),
+    }
+    lim = PLATFORM_LIMITS["reels"]
+    out["reels"] = {
+        "text": _cut_words(base_desc, lim["text"]),
+        "hashtags": _tags(content_type, clip_text, lim["tags"], ["#reels"]),
+    }
+    return out

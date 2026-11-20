@@ -109,6 +109,26 @@
                 <label class="field">Пресет экспорта
                   <select id="exportPreset" class="select"></select>
                 </label>
+                <label class="field">Кадрирование
+                  <select id="framing" class="select">
+                    <option value="face">По лицу — кадр 9:16 следует за спикером</option>
+                    <option value="fit">Вписать с фоном — весь кадр + размытый фон</option>
+                  </select>
+                </label>
+                <label class="field">Формат кадра
+                  <select id="aspect" class="select">
+                    <option value="9:16">9:16 — вертикальный (TikTok, Shorts, Reels)</option>
+                    <option value="16:9">16:9 — горизонтальный (YouTube)</option>
+                    <option value="4:3">4:3 — классический</option>
+                    <option value="1:1">1:1 — квадрат</option>
+                  </select>
+                </label>
+                <div class="field">Субтитры и хук (всегда внизу кадра)
+                  <label class="switch-row"><span>Показывать субтитры и хук</span><input type="checkbox" id="subsOn" class="switch" checked></label>
+                  <label class="switch-row"><span>Плашка под текстом</span><input type="checkbox" id="subBox" class="switch"></label>
+                  <label class="switch-row"><span>Эмодзи к словам</span><input type="checkbox" id="subEmoji" class="switch"></label>
+                  <label class="switch-row"><span>Анимация появления слов</span><input type="checkbox" id="subAnim" class="switch"></label>
+                </div>
               </div>
             </div>
 
@@ -176,13 +196,33 @@
               </div>
               <button class="collapse" id="descToggle"><span data-icon="doc"></span>Описание и хештеги<span data-icon="chev"></span></button>
               <div class="desc" id="descBody" hidden>
+                <div class="ptabs" id="platformTabs">
+                  <button class="ptab active" data-plat="tiktok">TikTok</button>
+                  <button class="ptab" data-plat="shorts">Shorts</button>
+                  <button class="ptab" data-plat="reels">Reels</button>
+                </div>
                 <p id="descText" class="desc-text">—</p>
                 <div class="tags" id="tags"></div>
                 <button class="btn btn-ghost btn-sm" id="copyDesc"><span data-icon="copy"></span>Копировать описание и хештеги</button>
               </div>
               <div class="timeline-wrap">
-                <div class="card-title small">Сила момента на таймлайне</div>
+                <div class="card-title small">Сила момента на таймлайне · клик — точка для нового клипа</div>
                 <canvas id="timeline" height="54"></canvas>
+              </div>
+              <div class="manual" id="manualBox">
+                <div class="card-title small">Ручная правка</div>
+                <button class="btn btn-ghost btn-sm" id="newFromPoint" disabled>Клип с выбранной точки (30 с)</button>
+                <div class="cut-row">
+                  <label class="field-sm">С, сек <input id="cutA" class="input input-sm" type="number" min="0" step="0.5"></label>
+                  <label class="field-sm">По, сек <input id="cutB" class="input input-sm" type="number" min="0" step="0.5"></label>
+                </div>
+                <button class="btn btn-ghost btn-sm" id="cutBtn" disabled>Вырезать этот фрагмент из клипа</button>
+                <div class="cut-row">
+                  <label class="field-sm">Склеить с клипом
+                    <select id="mergeWith" class="select select-sm"></select>
+                  </label>
+                </div>
+                <button class="btn btn-ghost btn-sm" id="mergeBtn" disabled>Склеить два клипа</button>
               </div>
               <button class="btn btn-accent btn-sm" id="dlOne" disabled><span data-icon="download"></span>Скачать этот клип</button>
             </aside>

@@ -45,17 +45,18 @@ class CropPlan:
     fallback: bool
 
 
-def crop_size(src_w: int, src_h: int) -> tuple[int, int]:
-    """Максимальное окно 9:16, вписанное в исходный кадр (чётные размеры)."""
-    if src_w / src_h >= 9 / 16:
+def crop_size(src_w: int, src_h: int, out_w: int = 1080, out_h: int = 1920) -> tuple[int, int]:
+    """Максимальное окно нужного соотношения сторон, вписанное в исходный кадр (чётные размеры)."""
+    ratio = out_w / out_h
+    if src_w / src_h >= ratio:
         ch = src_h
-        cw = ch * 9 / 16
+        cw = ch * ratio
     else:
         cw = src_w
-        ch = cw * 16 / 9
+        ch = cw / ratio
         if ch > src_h:
             ch = src_h
-            cw = ch * 9 / 16
+            cw = ch * ratio
     cw, ch = int(cw) // 2 * 2, int(ch) // 2 * 2
     return cw, ch
 
@@ -71,8 +72,9 @@ def _detect(frame_gray: np.ndarray, scale: float) -> tuple[float, float, float] 
     return ((x + w / 2) * inv, (y + h / 2) * inv, w * inv)
 
 
-def track_clip(src: Path, start: float, duration: float, src_w: int, src_h: int) -> CropPlan:
-    cw, ch = crop_size(src_w, src_h)
+def track_clip(src: Path, start: float, duration: float, src_w: int, src_h: int,
+               out_w: int = 1080, out_h: int = 1920) -> CropPlan:
+    cw, ch = crop_size(src_w, src_h, out_w, out_h)
     cap = cv2.VideoCapture(str(src))
     if not cap.isOpened():
         raise RuntimeError("OpenCV не открыл видео для детекции лиц")

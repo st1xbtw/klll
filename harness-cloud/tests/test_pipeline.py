@@ -164,14 +164,16 @@ def test_hook_visible_early_and_gone_later(podcast_run):
     assert clip["hook"], "для подкаста хук обязателен"
     path = _clip_path(podcast_run, clip)
 
-    def yellow(img):
-        band = img[150:450, :, :].astype(int)
+    # Хук выводится снизу кадра (над строкой субтитров), сверху ничего не появляется.
+    def yellow(img, top, bottom):
+        band = img[top:bottom, :, :].astype(int)
         b, g, r = band[:, :, 0], band[:, :, 1], band[:, :, 2]
         return int(((r > 230) & (g > 200) & (b < 80)).sum())
 
-    assert yellow(_grab(path, 1.0)) > 20000, "жёлтая плашка хука не видна в первую секунду"
-    assert yellow(_grab(path, 2.0)) > 20000, "хук пропал раньше 2 с"
-    assert yellow(_grab(path, 6.0)) < 500, "хук не должен висеть после первых 3 с"
+    assert yellow(_grab(path, 1.0), 950, 1450) > 20000, "жёлтая плашка хука не видна внизу в первую секунду"
+    assert yellow(_grab(path, 2.0), 950, 1450) > 20000, "хук пропал раньше 2 с"
+    assert yellow(_grab(path, 1.0), 0, 600) < 500, "хук не должен появляться вверху кадра"
+    assert yellow(_grab(path, 6.0), 950, 1450) < 500, "хук не должен висеть после первых 3 с"
 
 
 def test_hook_is_short_and_from_clip_text(podcast_run):

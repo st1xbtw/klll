@@ -12,13 +12,14 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import config, ingest, pipeline, storage, tools
+from . import config, ingest, pipeline, storage, tools, segments as sg
 from .jobs import JobManager
 
 DEFAULT_SETTINGS = {"theme": "dark", "clip_count": 8, "clip_length": 30, "subtitle_style": "violet",
                     "whisper_model": "base", "export_preset": "tiktok", "notify": True}
 RANGE_RE = re.compile(r"bytes=(\d*)-(\d*)")
 CONTENT_OK = set(config.CONTENT_TYPES)
+FRAMINGS = {"face": "По лицу", "fit": "Вписать с фоном"}
 
 
 def _read_settings() -> dict:
@@ -30,6 +31,13 @@ def _read_settings() -> dict:
     return dict(DEFAULT_SETTINGS)
 
 
+def _flag(value) -> bool:
+    """Булево из JSON или из формы: строки 'false', '0', '' — ложь."""
+    if isinstance(value, str):
+        return value.strip().lower() in ("1", "true", "yes", "on")
+    return bool(value)
+
+
 def _options(payload: dict) -> dict:
     s = _read_settings()
     cnt = int(payload.get("clip_count") or s["clip_count"])
@@ -38,6 +46,12 @@ def _options(payload: dict) -> dict:
         "subtitle_style": payload.get("subtitle_style") or s["subtitle_style"],
         "whisper_model": payload.get("whisper_model") or s["whisper_model"],
         "export_preset": payload.get("export_preset") or s["export_preset"],
+        "framing": payload.get("framing") if payload.get("framing") in FRAMINGS else "face",
+        "aspect": payload.get("aspect") if payload.get("aspect") in config.ASPECTS else config.DEFAULT_ASPECT,
+        "subtitles": _flag(payload["subtitles"]) if "subtitles" in payload else True,
+        "sub_box": _flag(payload.get("sub_box")),
+        "sub_emoji": _flag(payload.get("sub_emoji")),
+        "sub_anim": _flag(payload.get("sub_anim")),
     }
 
 
@@ -85,7 +99,8 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
                 "whisper_models": list(transcribe_models()), "ffmpeg": ffmpeg,
                 "clip": {"count_min": config.MIN_CLIPS, "count_max": config.MAX_CLIPS,
                          "length": config.CLIP_LEN, "tolerance": config.CLIP_TOL},
-                "output": {"w": config.OUT_W, "h": config.OUT_H, "fps": config.OUT_FPS}}
+                "output": {"w": config.OUT_W, "h": config.OUT_H, "fps": config.OUT_FPS},
+                "aspects": {k: list(v) for k, v in config.ASPECTS.items()}}
 
     @app.get("/api/settings")
     def get_settings():
@@ -138,7 +153,10 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
     @app.post("/api/projects/upload")
     async def upload(file: UploadFile = File(...), content_type: str = Form("general"),
                      clip_count: int = Form(8), subtitle_style: str = Form("violet"),
-                     whisper_model: str = Form("base"), export_preset: str = Form("tiktok")):
+                     whisper_model: str = Form("base"), export_preset: str = Form("tiktok"),
+                     framing: str = Form("face"), sub_box: str = Form("0"),
+                     sub_emoji: str = Form("0"), sub_anim: str = Form("0"),
+                     aspect: str = Form("9:16"), subtitles: str = Form("1")):
         ctype = _content_type(content_type)
         suffix = Path(file.filename or "video.mp4").suffix.lower()
         if suffix not in ingest.VIDEO_EXT:
@@ -151,7 +169,9 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
             ingest.validate_file(tmp_file)
             proj = storage.create_project(str(tmp_file), "file", ctype, _options({
                 "clip_count": clip_count, "subtitle_style": subtitle_style,
-                "whisper_model": whisper_model, "export_preset": export_preset}))
+                "whisper_model": whisper_model, "export_preset": export_preset,
+                "framing": framing, "sub_box": sub_box, "sub_emoji": sub_emoji, "sub_anim": sub_anim,
+                "aspect": aspect, "subtitles": subtitles}))
             # Оригинал переносим в папку проекта, исходник не трогаем.
             dest = storage.project_dir(proj["id"]) / ("source" + suffix)
             shutil.copy2(tmp_file, dest)
@@ -193,9 +213,26 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
                 c["style"] = body["subtitle_style"]
         if body.get("export_preset") in config.EXPORT_PRESETS:
             proj["options"]["export_preset"] = body["export_preset"]
+        if body.get("framing") in FRAMINGS:
+            proj["options"]["framing"] = body["framing"]
+        if body.get("aspect") in config.ASPECTS:
+            proj["options"]["aspect"] = body["aspect"]
+        if "subtitles" in body:
+            proj["options"]["subtitles"] = _flag(body["subtitles"])
+        for flag in ("sub_box", "sub_emoji", "sub_anim"):
+            if flag in body:
+                proj["options"][flag] = _flag(body[flag])
         for c in proj["clips"]:
             c["file"] = None
             c["status"] = "queued"
+            c["framing"] = proj["options"].get("framing", "face")
+            c["sub_box"] = _flag(proj["options"].get("sub_box"))
+            c["sub_emoji"] = bool(proj["options"].get("sub_emoji"))
+            c["sub_anim"] = bool(proj["options"].get("sub_anim"))
+            c["aspect"] = proj["options"].get("aspect", config.DEFAULT_ASPECT)
+            c["subtitles"] = proj["options"].get("subtitles", proj["content_type"] != "game")
+            if body.get("subtitle_style") in config.SUBTITLE_STYLES:
+                c["style"] = body["subtitle_style"]
         storage.save_project(proj)
         holder["jobs"].submit(pid, retry=True)
         return {"ok": True}
@@ -217,11 +254,104 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
         new_end = new_start + config.CLIP_LEN
         if new_start < 0 or new_end > proj.get("duration", 0):
             raise HTTPException(400, "Сдвиг выходит за пределы видео")
+        if len(clip.get("segments") or []) > 1:
+            raise HTTPException(400, "Клип собран из нескольких фрагментов: сдвиг начала недоступен")
         clip.update({"start": new_start, "end": new_end, "shift": shift_s,
+                     "segments": [[new_start, new_end]],
                      "file": None, "status": "queued"})
         storage.save_project(proj)
         holder["jobs"].submit(pid, retry=True)
         return {"ok": True, "start": new_start, "end": new_end}
+
+    def _load_idle(pid: str) -> dict:
+        try:
+            proj = storage.load_project(pid)
+        except (FileNotFoundError, ValueError):
+            raise HTTPException(404, "Проект не найден")
+        if proj["status"] == "running":
+            raise HTTPException(409, "Дождитесь окончания обработки")
+        return proj
+
+    def _find(proj: dict, idx: int) -> dict:
+        clip = next((c for c in proj["clips"] if c["index"] == idx), None)
+        if clip is None:
+            raise HTTPException(404, "Клип не найден")
+        return clip
+
+    def _new_clip(proj: dict, segs: list, origin: str, reason: str) -> dict:
+        idx = max([c["index"] for c in proj["clips"]] + [0]) + 1
+        start, end = sg.span(segs)
+        ctype = proj["content_type"]
+        return {
+            "index": idx, "start": start, "end": end,
+            "original_start": start, "original_end": end,
+            "segments": segs, "origin": origin,
+            "framing": proj["options"].get("framing", "face"),
+            "aspect": proj["options"].get("aspect", config.DEFAULT_ASPECT),
+            "sub_box": bool(proj["options"].get("sub_box")),
+            "sub_emoji": bool(proj["options"].get("sub_emoji")),
+            "sub_anim": bool(proj["options"].get("sub_anim")),
+            "duration": config.CLIP_LEN, "score": None, "parts": {},
+            "reason": reason, "text": "", "hook": "", "hook_source": "",
+            "description": "", "hashtags": [], "platforms": {},
+            "status": "queued", "error": None, "file": None, "thumb": None, "verify": None,
+            "subtitles": proj["options"].get("subtitles", ctype != "game"),
+            "style": proj["options"].get("subtitle_style", "violet"),
+            "timeline": proj["clips"][0]["timeline"] if proj["clips"] else [],
+        }
+
+    @app.post("/api/projects/{pid}/clips/custom")
+    async def custom_clip(pid: str, request: Request):
+        """Новый клип на 30 с, начиная с выбранной точки на таймлайне исходника."""
+        body = await request.json()
+        proj = _load_idle(pid)
+        try:
+            segs = sg.custom_clip(float(body.get("start", 0)), float(proj.get("duration") or 0))
+        except sg.SegmentError as exc:
+            raise HTTPException(400, str(exc))
+        clip = _new_clip(proj, segs, "manual", "Выбрано вручную")
+        proj["clips"].append(clip)
+        storage.save_project(proj)
+        holder["jobs"].submit(pid, retry=True)
+        return {"ok": True, "index": clip["index"]}
+
+    @app.post("/api/projects/{pid}/clips/{idx}/cut")
+    async def cut_clip(pid: str, idx: int, request: Request):
+        """Вырезать фрагмент [a, b] из клипа; недостающие секунды добираются из исходника."""
+        body = await request.json()
+        proj = _load_idle(pid)
+        clip = _find(proj, idx)
+        try:
+            segs = sg.cut(clip.get("segments") or [[clip["start"], clip["end"]]],
+                          float(body["a"]), float(body["b"]), float(proj.get("duration") or 0))
+        except (KeyError, ValueError) as exc:
+            raise HTTPException(400, str(exc))
+        clip.update({"segments": segs, "start": segs[0][0], "end": segs[-1][1],
+                     "origin": "edited", "file": None, "status": "queued",
+                     "reason": "Отредактировано вручную"})
+        storage.save_project(proj)
+        holder["jobs"].submit(pid, retry=True)
+        return {"ok": True, "segments": segs}
+
+    @app.post("/api/projects/{pid}/clips/merge")
+    async def merge_clips(pid: str, request: Request):
+        """Склейка: первые 15 с клипа a + первые 15 с клипа b → новый клип 30 с."""
+        body = await request.json()
+        proj = _load_idle(pid)
+        a = _find(proj, int(body.get("a", 0)))
+        b = _find(proj, int(body.get("b", 0)))
+        if a["index"] == b["index"]:
+            raise HTTPException(400, "Выберите два разных клипа")
+        try:
+            segs = sg.merge(a.get("segments") or [[a["start"], a["end"]]],
+                            b.get("segments") or [[b["start"], b["end"]]])
+        except sg.SegmentError as exc:
+            raise HTTPException(400, str(exc))
+        clip = _new_clip(proj, segs, "merged", f"Склеено из клипов {a['index']} и {b['index']}")
+        proj["clips"].append(clip)
+        storage.save_project(proj)
+        holder["jobs"].submit(pid, retry=True)
+        return {"ok": True, "index": clip["index"], "segments": segs}
 
     @app.delete("/api/projects/{pid}")
     def delete(pid: str):

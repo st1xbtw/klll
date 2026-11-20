@@ -11,6 +11,13 @@ APP_VERSION = "1.0.0"
 # Выходной формат клипов (спецификация).
 OUT_W = 1080
 OUT_H = 1920
+# Форматы кадра: ключ → (ширина, высота). По умолчанию вертикальный 9:16.
+ASPECTS = {"9:16": (1080, 1920), "16:9": (1920, 1080), "4:3": (1440, 1080), "1:1": (1080, 1080)}
+DEFAULT_ASPECT = "9:16"
+
+
+def out_size(aspect: str | None) -> tuple[int, int]:
+    return ASPECTS.get(aspect or DEFAULT_ASPECT, ASPECTS[DEFAULT_ASPECT])
 OUT_FPS = 30
 CLIP_LEN = 30.0          # секунд
 CLIP_TOL = 0.5           # допуск ± секунд

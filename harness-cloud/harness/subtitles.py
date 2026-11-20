@@ -15,7 +15,8 @@ MAX_GROUP_SECONDS = 2.6
 MAX_HOOK_WORDS = 7
 
 _SAFE_LOWER_MARGIN = 430   # px от низа
-_SAFE_TOP_MARGIN = 260     # px от верха
+_SAFE_TOP_MARGIN = 260     # px от верха (не используется: всё выводится снизу)
+_HOOK_LIFT = 230           # px: насколько хук поднят над строкой субтитров
 
 
 def _esc(text: str) -> str:
@@ -31,6 +32,14 @@ def _ts(sec: float) -> str:
 
 
 HOOK_LINE_CHARS = 16
+
+# Эмодзи добавляются к словам из этого словаря (только если включена опция «эмодзи»).
+EMOJI_MAP = {
+    "секрет": "🔑", "деньги": "💰", "успех": "🚀", "ошибка": "⚠️", "важно": "❗",
+    "никогда": "🚫", "правда": "💡", "совет": "💡", "лучший": "🏆", "лучшая": "🏆",
+    "шок": "😱", "вывод": "✅", "вот": "👉", "дисциплина": "💪", "дисциплине": "💪",
+    "мотивация": "🔥", "реально": "🔥", "невероятно": "🤯", "почему": "🤔",
+}
 
 
 def _wrap_words(text: str, max_chars: int) -> list[str]:
@@ -66,21 +75,32 @@ def _group_words(words: list[dict]) -> list[list[dict]]:
     return groups
 
 
-def _karaoke_text(group: list[dict], clip_start: float) -> str:
-    """Текст строки с тегами \\k (сантисекунды подсветки на слово) и переносами."""
+def _karaoke_text(group: list[dict], line_start: float, emoji: bool = False,
+                  anim: bool = False) -> str:
+    """Текст строки: \\k — подсветка каждого слова, \\t — «всплытие» слова, эмодзи, переносы."""
     parts: list[str] = []
     line_len = 0
     for i, w in enumerate(group):
         nxt = group[i + 1]["s"] if i + 1 < len(group) else w["e"]
         dur_cs = max(int(round((max(nxt, w["e"]) - w["s"]) * 100)), 5)
-        word = _esc(w["w"])
+        raw = w["w"]
+        if emoji:
+            key = raw.lower().strip(".,!?;:")
+            if key in EMOJI_MAP:
+                raw = raw + " " + EMOJI_MAP[key]
+        word = _esc(raw)
         if line_len and line_len + len(word) > MAX_LINE_CHARS:
             parts.append("\\N")
             line_len = 0
         elif parts:
             parts.append(" ")
             line_len += 1
-        parts.append(f"{{\\k{dur_cs}}}{word}")
+        tags = f"\\k{dur_cs}"
+        if anim:
+            t0 = int(round((w["s"] - line_start) * 1000))
+            tags = (f"\\t({t0},{t0 + 140},\\fscx118\\fscy118)"
+                    f"\\t({t0 + 140},{t0 + 280},\\fscx100\\fscy100)" + tags)
+        parts.append(f"{{{tags}}}{word}")
         line_len += len(word)
     return "".join(parts)
 
@@ -93,19 +113,30 @@ def _style_line(name: str, font: str, size: int, primary: str, secondary: str,
             f"{align},60,60,{margin_v},1")
 
 
+def _margin(out_h: int, px_at_1920: float) -> int:
+    """Отступ от низа в пикселях, пересчитанный под высоту кадра."""
+    return max(20, round(out_h * px_at_1920 / 1920))
+
+
 def build_ass(words: list[dict], clip_len: float, hook_text: str | None,
-              style_key: str, out: Path, subtitles: bool = True) -> Path:
-    """words: слова клипа с временами уже в секундах от начала клипа."""
+              style_key: str, out: Path, subtitles: bool = True, box: bool = False,
+              anim: bool = False, emoji: bool = False,
+              out_w: int = config.OUT_W, out_h: int = config.OUT_H) -> Path:
+    """words: слова клипа с временами уже в секундах от начала клипа.
+
+    Субтитры и хук выводятся только внизу кадра (выравнивание 2 — нижний центр).
+    Хук стоит над строкой субтитров, если они включены."""
     style = config.SUBTITLE_STYLES.get(style_key, config.SUBTITLE_STYLES["violet"])
     highlight = style["highlight"]
-    margin = _SAFE_LOWER_MARGIN if style["position"] == "lower" else 760
-    align = 2 if style["position"] == "lower" else 5
+    align = 2
+    margin = _margin(out_h, _SAFE_LOWER_MARGIN)
+    hook_margin = margin + (_margin(out_h, _HOOK_LIFT) if subtitles and words else 0)
 
     header = [
         "[Script Info]",
         "ScriptType: v4.00+",
-        "PlayResX: 1080",
-        "PlayResY: 1920",
+        f"PlayResX: {out_w}",
+        f"PlayResY: {out_h}",
         "WrapStyle: 2",
         "ScaledBorderAndShadow: yes",
         "",
@@ -113,10 +144,12 @@ def build_ass(words: list[dict], clip_len: float, hook_text: str | None,
         "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, "
         "Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, "
         "Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-        _style_line("Sub", style["font"], 92, highlight, "&H00FFFFFF&", "&H00000000&",
-                    "&H66000000&", 1, 7, 2, align, margin),
+        # Подложка: непрозрачный бокс (BorderStyle 3) полупрозрачного чёрного цвета.
+        _style_line("Sub", style["font"], 92, highlight, "&H00FFFFFF&",
+                    "&HA0000000&" if box else "&H00000000&",
+                    "&H66000000&", 3 if box else 1, 20 if box else 7, 0 if box else 2, align, margin),
         _style_line("Hook", style["font"], 70, "&H00000000&", "&H00000000&", "&H0000E5FF&",
-                    "&H00000000&", 3, 22, 0, 8, _SAFE_TOP_MARGIN),
+                    "&H00000000&", 3, 22, 0, align, hook_margin),
         "",
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
@@ -131,7 +164,7 @@ def build_ass(words: list[dict], clip_len: float, hook_text: str | None,
             e = min(e, clip_len)
             if e <= s:
                 continue
-            text = _karaoke_text(group, 0.0)
+            text = _karaoke_text(group, s, emoji=emoji, anim=anim)
             lines.append(f"Dialogue: 0,{_ts(s)},{_ts(e)},Sub,,0,0,0,,{text}")
 
     if hook_text:

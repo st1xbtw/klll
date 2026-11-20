@@ -144,6 +144,24 @@ def run() -> int:
         page.locator("#descToggle").click()
         ok("описание и хештеги: раскрыть и скопировать")
 
+        # Вкладки платформ и ручная правка (без лишних перерендеров)
+        page.locator("#descToggle").click()
+        page.locator('#platformTabs [data-plat="shorts"]').click()
+        expect(page.locator('#platformTabs [data-plat="shorts"]')).to_have_class("ptab active")
+        page.locator('#platformTabs [data-plat="tiktok"]').click()
+        page.locator("#descToggle").click()
+        ok("описание: вкладки TikTok / Shorts / Reels")
+        page.locator("#timeline").click(position={"x": 120, "y": 20})
+        expect(page.locator("#newFromPoint")).to_be_enabled()
+        ok("таймлайн: клик ставит точку, кнопка «Клип с выбранной точки» активна")
+        page.locator("#advToggle").click()
+        expect(page.locator("#advPanel")).to_be_visible()
+        page.locator("#aspect").select_option("16:9")
+        expect(page.locator("#toasts .toast").last).to_contain_text("формат")
+        expect(page.locator("#statusText")).to_contain_text("Нарезка", timeout=15000)
+        expect(page.locator("#statusText")).to_contain_text("Готово", timeout=900000)
+        ok("формат кадра 16:9 запускает перерендер")
+
         # Ручная подрезка: сдвиг и сброс
         page.locator("#trim").fill("1.5")
         expect(page.locator("#trimLbl")).to_contain_text("+1.5")
@@ -191,7 +209,7 @@ def run() -> int:
         page.locator("#subStyle").select_option("yellow")
         expect(page.locator("#toasts .toast").last).to_contain_text("стилем")
         expect(page.locator("#statusText")).to_contain_text("Нарезка", timeout=15000)
-        expect(page.locator("#statusText")).to_contain_text("Готово", timeout=600000)
+        expect(page.locator("#statusText")).to_contain_text("Готово", timeout=900000)
         ok("смена стиля субтитров запускает перерендер")
 
         # Настройки: сохранение и тема

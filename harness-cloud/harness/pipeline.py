@@ -13,7 +13,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import audio, config, faces, ingest, render, scoring, storage, subtitles, text_ai, tools, transcribe
+from . import audio, config, faces, ingest, render, scoring, segments as sg, storage, subtitles, text_ai, tools, transcribe
 from .tools import StepCancelled, ToolError
 
 STEPS = ["source", "audio", "transcribe", "analyze", "clips"]
@@ -146,12 +146,19 @@ def run(pid: str, cancel: threading.Event, retry: bool = False) -> dict:
                 clips.append({
                     "index": rank, "start": c.start, "end": c.end,
                     "original_start": c.start, "original_end": c.end,
+                    "segments": [[c.start, c.end]], "origin": "auto",
+                    "framing": proj["options"].get("framing", "face"),
+                    "aspect": proj["options"].get("aspect", config.DEFAULT_ASPECT),
+                    "sub_box": bool(proj["options"].get("sub_box")),
+                    "sub_emoji": bool(proj["options"].get("sub_emoji")),
+                    "sub_anim": bool(proj["options"].get("sub_anim")),
                     "duration": config.CLIP_LEN, "score": pct,
                     "parts": {k: round(v, 3) for k, v in c.parts.items()},
                     "reason": c.reason, "text": "", "hook": "", "hook_source": "",
                     "description": "", "hashtags": [], "status": "queued", "error": None,
                     "file": None, "thumb": None, "verify": None,
-                    "subtitles": ctype != "game", "style": proj["options"].get("subtitle_style", "violet"),
+                    "subtitles": proj["options"].get("subtitles", ctype != "game"),
+                    "style": proj["options"].get("subtitle_style", "violet"),
                     "timeline": [round(float(x), 3) for x in feat["loud"][::2]],
                 })
             proj["clips"] = clips
@@ -213,25 +220,34 @@ def _mark(proj: dict, done: set) -> None:
 
 def _render_one(proj: dict, clip: dict, src: Path, d: Path, words, segments, preset: str,
                 cancel: threading.Event) -> None:
-    """Рендер одного клипа: текст, кроп, субтитры, хук, файл и метаданные."""
+    """Рендер одного клипа: отрезки, текст, кадр, субтитры, хук, файл и метаданные."""
     idx = clip["index"]
     cdir = d / "clips" / f"{idx:02d}"
     cdir.mkdir(parents=True, exist_ok=True)
-    start, end = float(clip["start"]), float(clip["end"])
-    dur = end - start
+    segs = clip.get("segments") or [[clip["start"], clip["end"]]]
+    start, end = sg.span(segs)
+    dur = sg.total(segs)
     ctype = proj["content_type"]
 
-    clip_words = [w for w in (words or []) if start <= w["s"] < end]
-    rel_words = [{"w": w["w"], "s": w["s"] - start, "e": min(w["e"], end) - start} for w in clip_words]
+    clip_words = sg.words_for_clip(segs, words or [])
     clip_text = " ".join(w["w"] for w in clip_words)
     clip["text"] = clip_text
-    sentences = [s["text"] for s in segments if s["start"] >= start and s["end"] <= end and s["text"]]
+    sentences = [s["text"] for s in segments
+                 if any(a - 0.05 <= s["start"] and s["end"] <= b + 0.05 for a, b in segs) and s["text"]]
 
-    # Кроп по лицу
-    plan = faces.track_clip(src, start, dur, proj["src_w"], proj["src_h"])
-    clip["face"] = {"found": plan.faces_found, "samples": plan.samples, "fallback_center": plan.fallback}
+    framing = clip.get("framing") or "face"
+    out_w, out_h = config.out_size(clip.get("aspect"))
+    plans: list = []
+    if framing == "face":
+        for a, b in segs:
+            plans.append(faces.track_clip(src, a, b - a, proj["src_w"], proj["src_h"], out_w, out_h))
+    else:
+        plans = [None] * len(segs)
+    first = plans[0] if plans and plans[0] is not None else None
+    clip["face"] = ({"found": first.faces_found, "samples": first.samples, "fallback_center": first.fallback}
+                    if first is not None else {"found": 0, "samples": 0, "fallback_center": False})
 
-    use_subs = clip["subtitles"] and ctype != "game"
+    use_subs = bool(clip.get("subtitles", ctype != "game"))
     hook, hook_src = "", ""
     if use_subs:
         hook, hook_src = text_ai.hook_for(clip_text, sentences, ctype)
@@ -240,14 +256,25 @@ def _render_one(proj: dict, clip: dict, src: Path, d: Path, words, segments, pre
 
     ass = None
     if use_subs or hook:
-        ass = subtitles.build_ass(rel_words, dur, hook or None, clip["style"], cdir / "sub.ass",
-                                  subtitles=use_subs)
+        ass = subtitles.build_ass(
+            clip_words, dur, hook or None, clip["style"], cdir / "sub.ass", subtitles=use_subs,
+            box=bool(clip.get("sub_box")), anim=bool(clip.get("sub_anim")),
+            emoji=bool(clip.get("sub_emoji")), out_w=out_w, out_h=out_h)
     out = cdir / "clip.mp4"
-    res = render.render_clip(src, start, dur, plan, ass, out, preset, cancel)
+    if len(segs) == 1:
+        res = render.render_clip(src, start, dur, plans[0], ass, out, preset, cancel,
+                                 framing=framing, src_w=proj["src_w"], src_h=proj["src_h"],
+                                 out_w=out_w, out_h=out_h)
+    else:
+        res = render.render_segments(src, [tuple(x) for x in segs], plans, framing,
+                                     proj["src_w"], proj["src_h"], ass, out, preset, cancel,
+                                     out_w=out_w, out_h=out_h)
     render.make_thumb(out, cdir / "thumb.jpg")
     meta = text_ai.describe(clip_text, hook, ctype)
+    platforms = text_ai.describe_platforms(clip_text, hook, ctype)
     clip.update({
         "description": meta["description"], "hashtags": meta["hashtags"],
+        "platforms": platforms,
         "file": f"clips/{idx:02d}/clip.mp4", "thumb": f"clips/{idx:02d}/thumb.jpg",
         "verify": res, "error": None,
     })

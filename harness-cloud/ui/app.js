@@ -207,6 +207,12 @@
     fd.append("subtitle_style", $("subStyle").value);
     fd.append("whisper_model", $("whisperModel").value);
     fd.append("export_preset", $("exportPreset").value);
+    fd.append("framing", $("framing").value);
+    fd.append("sub_box", $("subBox").checked ? "1" : "0");
+    fd.append("sub_emoji", $("subEmoji").checked ? "1" : "0");
+    fd.append("sub_anim", $("subAnim").checked ? "1" : "0");
+    fd.append("aspect", $("aspect").value);
+    fd.append("subtitles", $("subsOn").checked ? "1" : "0");
     toast(`Загрузка файла «${file.name}»…`);
     try {
       const r = await api("/api/projects/upload", { method: "POST", body: fd });
@@ -229,6 +235,9 @@
         subtitle_style: $("subStyle").value,
         whisper_model: $("whisperModel").value,
         export_preset: $("exportPreset").value,
+        framing: $("framing").value,
+        sub_box: $("subBox").checked, sub_emoji: $("subEmoji").checked, sub_anim: $("subAnim").checked,
+        aspect: $("aspect").value, subtitles: $("subsOn").checked,
       }});
       afterCreate(r.ids);
     } catch (e) { toast(e.message, "err"); }
@@ -246,6 +255,8 @@
   function setCurrent(pid) {
     state.pid = pid;
     state.selected = null;
+    state.point = null;
+    state.syncedPid = null;
     state.lastStatus = null;
     localStorage.setItem("hc_project", pid);
     startPolling();
@@ -261,6 +272,7 @@
     try {
       const p = await api("/api/projects/" + encodeURIComponent(state.pid));
       state.project = p;
+      if (state.syncedPid !== p.id) { state.syncedPid = p.id; syncControls(p); }
       renderProject(p);
       const live = p.status === "running" || p.status === "queued";
       if (live) state.pollTimer = setTimeout(pollOnce, 1000);
@@ -362,7 +374,7 @@
         <div class="clip-card ${c.index === state.selected ? "active" : ""} ${c.status === "processing" ? "processing" : ""} ${c.status === "queued" ? "queued" : ""}" data-idx="${c.index}" tabindex="0" role="button" aria-label="Клип ${c.index}">
           <div class="clip-thumb">${thumb}
             <span class="rank">${c.index}</span>
-            <span class="score"><span data-icon="star"></span>${c.score}%</span>
+            <span class="score"><span data-icon="star"></span>${c.score == null ? "—" : c.score + "%"}</span>
             <span class="dur">0:30</span>
             ${overlay}
           </div>
@@ -398,9 +410,26 @@
     } else {
       $("phoneEmpty").classList.remove("hide");
     }
+    const [aw, ah] = (clip.aspect || "9:16").split(":");
+    document.querySelector(".phone").style.aspectRatio = `${aw} / ${ah}`;
     refreshSidePanel(clip);
     drawTimeline();
     if (userAction) player.play().catch(() => {});
+  }
+
+  state.platform = "tiktok";
+  state.point = null;
+
+  function selectedClip() { return currentClips().find((c) => c.index === state.selected) || null; }
+  function busy(p) { return !!p && (p.status === "running" || p.status === "queued"); }
+
+  function platformData(clip) {
+    const d = (clip.platforms || {})[state.platform] || {};
+    return {
+      title: d.title || "",
+      text: d.text || clip.description || clip.reason || "—",
+      tags: d.hashtags || clip.hashtags || [],
+    };
   }
 
   function refreshSidePanel(clip) {
@@ -412,10 +441,60 @@
     $("trimApply").disabled = !clip.file;
     $("trimReset").disabled = !clip.file;
     $("dlOne").disabled = !clip.file;
-    $("descText").textContent = clip.description || clip.reason || "—";
-    $("tags").innerHTML = (clip.hashtags || []).map((t) => `<span class="tag">${esc(t)}</span>`).join("");
-    $("copyDesc").dataset.text = [clip.description || "", (clip.hashtags || []).join(" ")].join("\n\n").trim();
+    const pd = platformData(clip);
+    $("descText").textContent = pd.title ? pd.title + "\n" + pd.text : pd.text;
+    $("tags").innerHTML = pd.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join("");
+    $("copyDesc").dataset.text = [pd.title, pd.text, pd.tags.join(" ")].filter(Boolean).join("\n\n").trim();
+    const others = currentClips().filter((c) => c.index !== clip.index);
+    const opts = others.map((c) => `<option value="${c.index}">Клип ${c.index}</option>`).join("")
+      || '<option value="">других клипов нет</option>';
+    const mw = $("mergeWith");
+    if (mw.dataset.sig !== opts) { mw.innerHTML = opts; mw.dataset.sig = opts; }
+    const idle = !busy(state.project);
+    $("cutBtn").disabled = !idle || !clip.index;
+    $("mergeBtn").disabled = !idle || !others.length;
+    $("newFromPoint").disabled = !idle || state.point == null;
   }
+
+  document.querySelectorAll(".ptab").forEach((b) => b.addEventListener("click", () => {
+    state.platform = b.dataset.plat;
+    document.querySelectorAll(".ptab").forEach((x) => x.classList.toggle("active", x === b));
+    const clip = selectedClip();
+    if (clip) refreshSidePanel(clip);
+  }));
+
+  $("newFromPoint").addEventListener("click", async () => {
+    if (!state.pid || state.point == null) return;
+    try {
+      const r = await api(`/api/projects/${encodeURIComponent(state.pid)}/clips/custom`, {
+        method: "POST", body: { start: state.point } });
+      toast(`Клип ${r.index} с выбранной точки поставлен в очередь`, "ok");
+      state.point = null;
+      startPolling();
+    } catch (e) { toast(e.message, "err"); }
+  });
+  $("cutBtn").addEventListener("click", async () => {
+    const clip = selectedClip(); if (!clip) return;
+    const a = Number($("cutA").value), b = Number($("cutB").value);
+    if (!(b > a)) return toast("Поле «С» должно быть меньше «По»", "err");
+    try {
+      await api(`/api/projects/${encodeURIComponent(state.pid)}/clips/${clip.index}/cut`, {
+        method: "POST", body: { a, b } });
+      toast(`Фрагмент вырезан из клипа ${clip.index}, перерендер`);
+      startPolling();
+    } catch (e) { toast(e.message, "err"); }
+  });
+  $("mergeBtn").addEventListener("click", async () => {
+    const clip = selectedClip(); if (!clip) return;
+    const other = Number($("mergeWith").value);
+    if (!other) return;
+    try {
+      const r = await api(`/api/projects/${encodeURIComponent(state.pid)}/clips/merge`, {
+        method: "POST", body: { a: clip.index, b: other } });
+      toast(`Склеенный клип ${r.index} поставлен в очередь`, "ok");
+      startPolling();
+    } catch (e) { toast(e.message, "err"); }
+  });
 
   // Предпросмотр: управление
   const player = $("player");
@@ -539,6 +618,11 @@
       ctx.font = "bold 10px sans-serif";
       ctx.fillText(String(c.index), x0 + 3, 12);
     });
+    if (state.point != null) {
+      const x = (state.point / dur) * w;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(x - 1, 0, 2, h);
+    }
   }
   $("timeline").addEventListener("click", (e) => {
     const p = state.project; if (!p || !p.clips) return;
@@ -549,7 +633,11 @@
       const mid = (c.start + c.end) / 2;
       return !best || Math.abs(mid - t) < Math.abs((best.start + best.end) / 2 - t) ? c : best;
     }, null);
+    state.point = Math.max(0, Math.min(dur - 0.5, t));
     if (hit && hit.file) selectClip(hit.index, false);
+    else drawTimeline();
+    $("newFromPoint").disabled = busy(p) || !state.pid;
+    toast(`Точка ${fmtTime(state.point)}: нажмите «Клип с выбранной точки»`);
   });
   window.addEventListener("resize", drawTimeline);
 
@@ -597,20 +685,42 @@
   }
 
   // ---------- стиль и пресет без повторной транскрибации ----------
-  $("subStyle").addEventListener("change", async () => {
+  async function restyle(body, okMsg) {
     const p = state.project;
     if (!p || !state.pid || !(p.clips || []).length) return;
-    if (p.status === "running" || p.status === "queued") {
-      toast("Дождитесь окончания обработки, потом смените стиль", "err");
-      $("subStyle").value = (p.options && p.options.subtitle_style) || $("subStyle").value;
+    if (busy(p)) {
+      toast("Дождитесь окончания обработки, потом меняйте оформление", "err");
+      syncControls(p);
       return;
     }
     try {
-      await api(`/api/projects/${state.pid}/restyle`, { method: "POST", body: { subtitle_style: $("subStyle").value } });
-      toast("Перерендер клипов с новым стилем субтитров");
+      await api(`/api/projects/${state.pid}/restyle`, { method: "POST", body });
+      toast(okMsg);
       startPolling();
     } catch (e) { toast(e.message, "err"); }
-  });
+  }
+  $("subStyle").addEventListener("change", () =>
+    restyle({ subtitle_style: $("subStyle").value }, "Перерендер клипов с новым стилем субтитров"));
+  $("framing").addEventListener("change", () =>
+    restyle({ framing: $("framing").value }, "Перерендер клипов с новым кадрированием"));
+  $("aspect").addEventListener("change", () =>
+    restyle({ aspect: $("aspect").value }, "Перерендер клипов в новом формате кадра"));
+  $("subsOn").addEventListener("change", () =>
+    restyle({ subtitles: $("subsOn").checked }, "Перерендер клипов: субтитры и хук"));
+  [["subBox", "sub_box"], ["subEmoji", "sub_emoji"], ["subAnim", "sub_anim"]].forEach(([id, key]) =>
+    $(id).addEventListener("change", () =>
+      restyle({ [key]: $(id).checked }, "Перерендер клипов с новыми субтитрами")));
+
+  function syncControls(p) {
+    const o = (p && p.options) || {};
+    if (o.subtitle_style) $("subStyle").value = o.subtitle_style;
+    $("framing").value = o.framing || "face";
+    $("aspect").value = o.aspect || "9:16";
+    $("subsOn").checked = o.subtitles !== false;
+    $("subBox").checked = !!o.sub_box;
+    $("subEmoji").checked = !!o.sub_emoji;
+    $("subAnim").checked = !!o.sub_anim;
+  }
 
   // ---------- история ----------
   async function loadHistory() {
