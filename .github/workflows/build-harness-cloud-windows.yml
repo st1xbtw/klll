@@ -3,6 +3,7 @@ name: build-harness-cloud-windows
 on:
   workflow_dispatch:
   push:
+    branches: ["harness-cloud"]
     tags: ["v*"]
 
 jobs:
