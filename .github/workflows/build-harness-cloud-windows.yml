@@ -9,6 +9,7 @@ on:
 jobs:
   windows:
     runs-on: windows-latest
+    timeout-minutes: 90
     defaults:
       run:
         working-directory: harness-cloud
@@ -22,7 +23,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt pyinstaller
+          python -m pip install -r requirements.txt pyinstaller scikit-image
 
       - name: "Fetch ffmpeg and ffprobe (Windows static build)"
         shell: pwsh
@@ -37,28 +38,57 @@ jobs:
       - name: Build HarnessCloud.exe
         run: python -m PyInstaller --noconfirm harness-cloud.spec
 
-      - name: "Smoke test - server starts and reports ffmpeg"
+      - name: "End-to-end test of the built exe"
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
           $env:HARNESS_DATA_DIR = "$env:RUNNER_TEMP\hc_data"
-          $p = Start-Process -FilePath "dist\HarnessCloud\HarnessCloud.exe" -ArgumentList "--server","--port","8765" -PassThru -WindowStyle Hidden
-          $ok = $false
-          for ($i = 0; $i -lt 60; $i++) {
-            Start-Sleep -Seconds 2
-            try {
-              $meta = Invoke-RestMethod -Uri "http://127.0.0.1:8765/api/meta" -TimeoutSec 5
-              $ok = $true
-              break
-            } catch {}
+          $env:PATH = "$PWD\bin;$env:PATH"
+          $srv = Start-Process -FilePath "dist\HarnessCloud\HarnessCloud.exe" -ArgumentList "--server","--port","8765" -PassThru -WindowStyle Hidden
+          try {
+            $meta = $null
+            for ($i = 0; $i -lt 60 -and -not $meta; $i++) {
+              Start-Sleep -Seconds 2
+              try { $meta = Invoke-RestMethod -Uri "http://127.0.0.1:8765/api/meta" -TimeoutSec 5 } catch {}
+            }
+            if (-not $meta) { Get-Content "$env:RUNNER_TEMP\hc_data\harness.log" -ErrorAction SilentlyContinue; throw "Сервер не ответил" }
+            if ($meta.ffmpeg -like "ОШИБКА*") { throw "ffmpeg не найден: $($meta.ffmpeg)" }
+            Write-Host "OK server: $($meta.name) $($meta.version), ffmpeg: $($meta.ffmpeg)"
+
+            python scripts/ci_make_video.py "$env:RUNNER_TEMP\e2e"
+            $video = "$env:RUNNER_TEMP\e2e\test.mp4"
+            $resp = curl.exe -s -F "file=@$video" -F "content_type=general" -F "clip_count=5" -F "whisper_model=tiny" -F "subtitle_style=violet" -F "export_preset=tiktok" http://127.0.0.1:8765/api/projects/upload | ConvertFrom-Json
+            $projId = $resp.ids[0]
+            Write-Host "project: $projId"
+
+            $deadline = (Get-Date).AddMinutes(40)
+            do {
+              Start-Sleep -Seconds 10
+              $proj = Invoke-RestMethod -Uri "http://127.0.0.1:8765/api/projects/$projId"
+            } while ($proj.status -in @("queued","running") -and (Get-Date) -lt $deadline)
+            Write-Host "status=$($proj.status) stage=$($proj.stage)"
+            Write-Host "warnings: $($proj.warnings -join ' | ')"
+            if ($proj.status -ne "done") {
+              Get-Content "$env:RUNNER_TEMP\hc_data\harness.log" -ErrorAction SilentlyContinue
+              throw "E2E: проект не завершён: $($proj.error)"
+            }
+            $ready = @($proj.clips | Where-Object { $_.status -eq "done" -and $_.verify.ok })
+            foreach ($c in $ready) {
+              Write-Host ("clip {0}: {1}x{2} {3}s audio={4} score={5} face={6}/{7} hook='{8}'" -f $c.index, $c.verify.width, $c.verify.height, $c.verify.duration, $c.verify.has_audio, $c.score, $c.face.found, $c.face.samples, $c.hook)
+            }
+            if ($ready.Count -lt 5) { throw "E2E: готово проверенных клипов $($ready.Count), нужно минимум 5" }
+
+            curl.exe -s -o "$env:RUNNER_TEMP\all.zip" "http://127.0.0.1:8765/api/projects/$projId/zip"
+            Add-Type -AssemblyName System.IO.Compression.FileSystem
+            $z = [System.IO.Compression.ZipFile]::OpenRead("$env:RUNNER_TEMP\all.zip")
+            $names = @($z.Entries | ForEach-Object { $_.Name })
+            $z.Dispose()
+            Write-Host "zip: $($names -join ', ')"
+            if (-not ($names -contains "metadata.json")) { throw "ZIP без metadata.json" }
+            Write-Host "E2E OK: $($ready.Count) клипов 1080x1920, ZIP проверен"
+          } finally {
+            Stop-Process -Id $srv.Id -Force -ErrorAction SilentlyContinue
           }
-          Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
-          if (-not $ok) {
-            Write-Host "--- harness.log ---"
-            Get-Content "$env:RUNNER_TEMP\hc_data\harness.log" -ErrorAction SilentlyContinue
-            throw "Сервер не ответил"
-          }
-          if ($meta.ffmpeg -like "ОШИБКА*") { throw "ffmpeg не найден: $($meta.ffmpeg)" }
-          Write-Host "OK: $($meta.name) $($meta.version), ffmpeg: $($meta.ffmpeg)"
 
       - name: Package
         shell: pwsh
