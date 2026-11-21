@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 APP_NAME = "Harness Cloud"
-APP_VERSION = "1.3.0"
+APP_VERSION = "1.7.0"
 
 # Выходной формат клипов (спецификация).
 OUT_W = 1080
@@ -95,11 +95,31 @@ EXPORT_PRESETS = {
 }
 
 # Стили субтитров: шрифт, цвет подсветки (ASS BGR), позиция (MarginV от низа).
+# Пресеты субтитров в духе CapCut: жирный шрифт, толстая чёрная обводка, пословная подсветка.
+# highlight — цвет уже произнесённого слова (ASS PrimaryColour), base — цвет ещё не произнесённого.
+# pop — включает «всплеск» каждого слова (масштаб 118% → 100%).
 SUBTITLE_STYLES = {
-    "violet": {"label": "Фиолетовый", "font": "Segoe UI", "highlight": "&H00FF8A5B&", "position": "lower"},
-    "yellow": {"label": "Жёлтый", "font": "Arial", "highlight": "&H0000E5FF&", "position": "lower"},
-    "white": {"label": "Белый минимал", "font": "Arial", "highlight": "&H00FFFFFF&", "position": "center"},
+    "capcut": {"label": "CapCut: белый + жёлтое слово", "font": "Inter", "highlight": "&H0000FFFF&",
+               "base": "&H00FFFFFF&", "outline": "&H00000000&", "size": 104, "outline_w": 10,
+               "shadow": 3, "pop": True},
+    "violet": {"label": "Фиолетовый", "font": "Inter", "highlight": "&H00FF8A5B&",
+               "base": "&H00FFFFFF&", "outline": "&H00000000&", "size": 100, "outline_w": 9,
+               "shadow": 2, "pop": False},
+    "yellow": {"label": "Жёлтый", "font": "Inter", "highlight": "&H0000E5FF&",
+               "base": "&H00FFFFFF&", "outline": "&H00000000&", "size": 100, "outline_w": 9,
+               "shadow": 2, "pop": False},
+    "neon": {"label": "Неон: голубое слово", "font": "Inter", "highlight": "&H00FFFF00&",
+             "base": "&H00FFFFFF&", "outline": "&H00201000&", "size": 100, "outline_w": 9,
+             "shadow": 0, "pop": True},
+    "white": {"label": "Белый минимал", "font": "Inter", "highlight": "&H00FFFFFF&",
+              "base": "&H00D9D9D9&", "outline": "&H00000000&", "size": 92, "outline_w": 6,
+              "shadow": 0, "pop": False},
 }
+DEFAULT_SUBTITLE_STYLE = "capcut"
+
+# Положение субтитров: верх, центр или низ кадра. Перетаскивание маркера в редакторе важнее пресета.
+SUB_PLACES = {"bottom": "Внизу", "center": "По центру", "top": "Вверху"}
+DEFAULT_SUB_PLACE = "bottom"
 
 
 def _base_dir() -> Path:

@@ -95,6 +95,11 @@
               <label class="field">Стиль субтитров
                 <select id="subStyle" class="select"></select>
               </label>
+              <label class="field">Положение субтитров
+                <select id="subPlace" class="select">
+                  <option value="bottom">Внизу</option><option value="center">По центру</option><option value="top">Вверху</option>
+                </select>
+              </label>
               <label class="field">Количество клипов
                 <select id="clipCount" class="select">
                   <option value="5">5</option><option value="6">6</option><option value="7">7</option>
@@ -155,8 +160,9 @@
               <label class="field">Эффект субтитров
                 <select id="subEffect" class="select"></select>
               </label>
-              <div class="field">Субтитры и хук (всегда внизу кадра)
-                <label class="switch-row"><span>Показывать субтитры и хук</span><input type="checkbox" id="subsOn" class="switch" checked></label>
+              <div class="field">Субтитры и хук
+                <label class="switch-row"><span>Показывать субтитры</span><input type="checkbox" id="subsOn" class="switch" checked></label>
+                <label class="switch-row"><span>Показывать хук в начале</span><input type="checkbox" id="showHook" class="switch" checked></label>
                 <label class="switch-row"><span>Плашка под текстом</span><input type="checkbox" id="subBox" class="switch"></label>
                 <label class="switch-row"><span>Эмодзи к словам</span><input type="checkbox" id="subEmoji" class="switch"></label>
                 <label class="switch-row"><span>Анимация появления слов</span><input type="checkbox" id="subAnim" class="switch"></label>

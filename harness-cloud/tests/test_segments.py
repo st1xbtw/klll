@@ -81,9 +81,11 @@ def test_subtitles_and_hook_always_bottom(tmp_path):
                 name = fields[0].split(":")[1].strip()
                 if name == "Mark":
                     assert fields[18] == "9", line      # водяной знак: верхний правый угол
-                else:
-                    assert fields[18] == "2", line      # субтитры и хук: нижний центр
+                elif name == "Sub":
+                    assert fields[18] == "2", line      # субтитры по умолчанию: нижний центр
                     assert int(fields[21]) > 0, line    # MarginV: отступ от низа
+                else:
+                    assert name == "Hook" and fields[18] == "2", line  # позиция хука задаётся \an/\pos в строке
             assert "\\an8" not in text and "\\an5" not in text
 
 
@@ -117,10 +119,10 @@ def test_font_position_effects_in_ass(tmp_path):
     # шрифт попадает в стили всех строк
     ass = sub.build_ass(words, 30, "Хук", "violet", tmp_path / "f.ass", font="DejaVu Sans",
                         out_w=1080, out_h=1920).read_text(encoding="utf-8")
-    assert ass.count("Style: Sub,DejaVu Sans,") == 1 and ",DejaVu Sans,70," in ass
-    # по умолчанию субтитры не получают \pos — стандартное место внизу
+    assert ass.count("Style: Sub,DejaVu Sans,") == 1 and ",DejaVu Sans,74," in ass
+    # по умолчанию субтитры стоят внизу, без движения; \pos задаётся в каждой реплике
     dlg = [l for l in ass.splitlines() if l.startswith("Dialogue: 0,")][0]
-    assert "\\pos(" not in dlg and "\\move(" not in dlg
+    assert "\\move(" not in dlg and "\\an2" in dlg  # без эффекта: якорь снизу, без движения
     # позиция: \pos в каждой реплике субтитров
     moved = sub.build_ass(words, 30, None, "violet", tmp_path / "p.ass", pos=(300.0, 900.0),
                           out_w=1080, out_h=1920).read_text(encoding="utf-8")

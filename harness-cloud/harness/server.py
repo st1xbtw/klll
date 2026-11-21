@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from . import config, fonts, ingest, pipeline, storage, tools, segments as sg
 from .jobs import JobManager
 
-DEFAULT_SETTINGS = {"theme": "dark", "clip_count": 8, "clip_length": 30, "subtitle_style": "violet",
+DEFAULT_SETTINGS = {"theme": "dark", "clip_count": 8, "clip_length": 30, "subtitle_style": config.DEFAULT_SUBTITLE_STYLE,
                     "whisper_model": "base", "export_preset": "tiktok", "notify": True, "save_dir": "",
                     "quality": "1080p", "fps": 30, "save_min_score": 0,
                     "offline": False}
@@ -93,6 +93,9 @@ def _options(payload: dict) -> dict:
         "sub_box": _flag(payload.get("sub_box")),
         "sub_emoji": _flag(payload.get("sub_emoji")),
         "sub_anim": _flag(payload.get("sub_anim")),
+        "show_hook": _flag(payload["show_hook"]) if "show_hook" in payload else True,
+        "sub_place": payload.get("sub_place") if payload.get("sub_place") in config.SUB_PLACES
+        else config.DEFAULT_SUB_PLACE,
     }
 
 
@@ -232,12 +235,13 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
 
     @app.post("/api/projects/upload")
     async def upload(file: UploadFile = File(...), content_type: str = Form("general"),
-                     clip_count: int = Form(8), subtitle_style: str = Form("violet"),
+                     clip_count: int = Form(8), subtitle_style: str = Form(config.DEFAULT_SUBTITLE_STYLE),
                      whisper_model: str = Form("base"), export_preset: str = Form("tiktok"),
                      framing: str = Form("face"), sub_box: str = Form("0"),
                      sub_emoji: str = Form("0"), sub_anim: str = Form("0"),
                      aspect: str = Form("9:16"), quality: str = Form("1080p"), fps: int = Form(30),
-                     subtitles: str = Form("1"),
+                     subtitles: str = Form("1"), show_hook: str = Form("1"),
+                     sub_place: str = Form("bottom"),
                      watermark: str = Form(""), sub_font: str = Form(""), sub_effect: str = Form("none")):
         ctype = _content_type(content_type)
         suffix = Path(file.filename or "video.mp4").suffix.lower()
@@ -254,8 +258,8 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
                 "whisper_model": whisper_model, "export_preset": export_preset,
                 "framing": framing, "sub_box": sub_box, "sub_emoji": sub_emoji, "sub_anim": sub_anim,
                 "aspect": aspect, "quality": quality, "fps": fps,
-                "subtitles": subtitles, "watermark": watermark,
-                "sub_font": sub_font, "sub_effect": sub_effect}))
+                "subtitles": subtitles, "show_hook": show_hook, "sub_place": sub_place,
+                "watermark": watermark, "sub_font": sub_font, "sub_effect": sub_effect}))
             # Оригинал переносим в папку проекта, исходник не трогаем.
             dest = storage.project_dir(proj["id"]) / ("source" + suffix)
             shutil.copy2(tmp_file, dest)
@@ -316,9 +320,14 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
         if "sub_x" in body or "sub_y" in body:
             proj["options"]["sub_x"] = _pct(body.get("sub_x"))
             proj["options"]["sub_y"] = _pct(body.get("sub_y"))
-        for flag in ("sub_box", "sub_emoji", "sub_anim"):
+        for flag in ("sub_box", "sub_emoji", "sub_anim", "show_hook"):
             if flag in body:
                 proj["options"][flag] = _flag(body[flag])
+        if body.get("sub_place") in config.SUB_PLACES:
+            proj["options"]["sub_place"] = body["sub_place"]
+            # Выбор места из списка сбрасывает ручную позицию маркера, иначе она перекроет пресет.
+            proj["options"]["sub_x"] = None
+            proj["options"]["sub_y"] = None
         for c in proj["clips"]:
             c["file"] = None
             c["status"] = "queued"
@@ -326,6 +335,8 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
             c["sub_box"] = _flag(proj["options"].get("sub_box"))
             c["sub_emoji"] = bool(proj["options"].get("sub_emoji"))
             c["sub_anim"] = bool(proj["options"].get("sub_anim"))
+            c["show_hook"] = bool(proj["options"].get("show_hook", proj["content_type"] != "game"))
+            c["sub_place"] = proj["options"].get("sub_place", config.DEFAULT_SUB_PLACE)
             c["aspect"] = proj["options"].get("aspect", config.DEFAULT_ASPECT)
             c["quality"] = proj["options"].get("quality", config.DEFAULT_QUALITY)
             c["fps"] = proj["options"].get("fps", config.DEFAULT_FPS)
@@ -403,12 +414,14 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
             "sub_box": bool(proj["options"].get("sub_box")),
             "sub_emoji": bool(proj["options"].get("sub_emoji")),
             "sub_anim": bool(proj["options"].get("sub_anim")),
+            "show_hook": bool(proj["options"].get("show_hook", ctype != "game")),
+            "sub_place": proj["options"].get("sub_place", config.DEFAULT_SUB_PLACE),
             "duration": config.CLIP_LEN, "score": None, "parts": {},
             "reason": reason, "text": "", "hook": "", "hook_source": "",
             "description": "", "hashtags": [], "platforms": {},
             "status": "queued", "error": None, "file": None, "thumb": None, "verify": None,
             "subtitles": proj["options"].get("subtitles", ctype != "game"),
-            "style": proj["options"].get("subtitle_style", "violet"),
+            "style": proj["options"].get("subtitle_style", config.DEFAULT_SUBTITLE_STYLE),
             "timeline": proj["clips"][0]["timeline"] if proj["clips"] else [],
         }
 

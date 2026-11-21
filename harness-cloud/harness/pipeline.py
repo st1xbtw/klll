@@ -174,13 +174,15 @@ def run(pid: str, cancel: threading.Event, retry: bool = False) -> dict:
                     "sub_box": bool(proj["options"].get("sub_box")),
                     "sub_emoji": bool(proj["options"].get("sub_emoji")),
                     "sub_anim": bool(proj["options"].get("sub_anim")),
+                    "show_hook": bool(proj["options"].get("show_hook", proj["content_type"] != "game")),
+                    "sub_place": proj["options"].get("sub_place", config.DEFAULT_SUB_PLACE),
                     "duration": config.CLIP_LEN, "score": pct,
                     "parts": {k: round(v, 3) for k, v in c.parts.items()},
                     "reason": c.reason, "text": "", "hook": "", "hook_source": "",
                     "description": "", "hashtags": [], "status": "queued", "error": None,
                     "file": None, "thumb": None, "verify": None,
                     "subtitles": proj["options"].get("subtitles", ctype != "game"),
-                    "style": proj["options"].get("subtitle_style", "violet"),
+                    "style": proj["options"].get("subtitle_style", config.DEFAULT_SUBTITLE_STYLE),
                     "timeline": [round(float(x), 3) for x in feat["loud"][::2]],
                 })
             proj["clips"] = clips
@@ -288,8 +290,9 @@ def _render_one(proj: dict, clip: dict, src: Path, d: Path, words, segments, pre
                     if first is not None else {"found": 0, "samples": 0, "fallback_center": False})
 
     use_subs = bool(clip.get("subtitles", ctype != "game"))
+    show_hook = bool(clip.get("show_hook", ctype != "game"))
     hook, hook_src = "", ""
-    if use_subs:
+    if show_hook:
         hook, hook_src = text_ai.hook_for(clip_text, sentences, ctype)
     clip["hook"] = hook
     clip["hook_source"] = hook_src if hook else ""
@@ -306,7 +309,8 @@ def _render_one(proj: dict, clip: dict, src: Path, d: Path, words, segments, pre
             clip_words, dur, hook or None, clip["style"], cdir / "sub.ass", subtitles=use_subs,
             box=bool(clip.get("sub_box")), anim=bool(clip.get("sub_anim")),
             emoji=bool(clip.get("sub_emoji")), out_w=out_w, out_h=out_h,
-            watermark=watermark or None, font=family, pos=pos, effect=effect)
+            watermark=watermark or None, font=family, pos=pos, effect=effect,
+            place=clip.get("sub_place") or config.DEFAULT_SUB_PLACE)
     out = cdir / "clip.mp4"
     if len(segs) == 1:
         t0 = time.time()

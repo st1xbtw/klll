@@ -221,6 +221,8 @@
     fd.append("sub_font", $("subFont").value);
     fd.append("sub_effect", $("subEffect").value || "none");
     fd.append("subtitles", $("subsOn").checked ? "1" : "0");
+    fd.append("show_hook", $("showHook").checked ? "1" : "0");
+    fd.append("sub_place", $("subPlace").value);
     toast(`Загрузка файла «${file.name}»…`);
     try {
       const r = await api("/api/projects/upload", { method: "POST", body: fd });
@@ -247,6 +249,7 @@
         sub_box: $("subBox").checked, sub_emoji: $("subEmoji").checked, sub_anim: $("subAnim").checked,
         aspect: $("aspect").value, quality: $("quality").value, fps: Number($("fps").value),
         subtitles: $("subsOn").checked,
+        show_hook: $("showHook").checked, sub_place: $("subPlace").value,
         watermark: $("watermark").value.trim(),
         sub_font: $("subFont").value, sub_effect: $("subEffect").value || "none",
       }});
@@ -775,6 +778,10 @@
     restyle({ watermark: $("watermark").value.trim() }, "Перерендер клипов с новым водяным знаком"));
   $("subsOn").addEventListener("change", () =>
     restyle({ subtitles: $("subsOn").checked }, "Перерендер клипов: субтитры и хук"));
+  $("subPlace").addEventListener("change", () =>
+    restyle({ sub_place: $("subPlace").value }, "Перерендер клипов: новое место субтитров"));
+  $("showHook").addEventListener("change", () =>
+    restyle({ show_hook: $("showHook").checked }, "Перерендер клипов: хук включён или выключен"));
   [["subBox", "sub_box"], ["subEmoji", "sub_emoji"], ["subAnim", "sub_anim"]].forEach(([id, key]) =>
     $(id).addEventListener("change", () =>
       restyle({ [key]: $(id).checked }, "Перерендер клипов с новыми субтитрами")));
@@ -872,6 +879,8 @@
     $("fps").value = String(o.fps || 30);
     $("watermark").value = o.watermark || "";
     $("subsOn").checked = o.subtitles !== false;
+    $("showHook").checked = o.show_hook !== false;
+    $("subPlace").value = o.sub_place || "bottom";
     $("subEffect").value = o.sub_effect || "none";
     if (o.sub_font !== undefined) $("subFont").value = o.sub_font || "";
     $("subBox").checked = !!o.sub_box;
