@@ -1,6 +1,7 @@
 """Общие константы и пути приложения."""
 from __future__ import annotations
 
+import json
 import os
 import sys
 from pathlib import Path
@@ -125,11 +126,20 @@ def _data_dir() -> Path:
 BASE_DIR = _base_dir()
 UI_DIR = BASE_DIR / "ui"
 MODELS_DIR = BASE_DIR / "models"          # встроенные ресурсы (каскад Haar)
+BUNDLED_WHISPER_DIR = MODELS_DIR / "whisper"  # модели Whisper в сборке: работают без интернета
 DATA_DIR = _data_dir()
 PROJECTS_DIR = DATA_DIR / "projects"
 WHISPER_DIR = DATA_DIR / "whisper"
 SETTINGS_FILE = DATA_DIR / "settings.json"
-CALIBRATION_FILE = DATA_DIR / "calibration.json"  # скорость рендера, измеренная на этой машине
+CALIBRATION_FILE = DATA_DIR / "calibration.json"
+
+
+def offline_mode() -> bool:
+    """Офлайн-режим из настроек: без обращения к сети (ИИ-заголовки и загрузка по ссылке отключены)."""
+    try:
+        return bool(json.loads(SETTINGS_FILE.read_text(encoding="utf-8")).get("offline"))
+    except (OSError, ValueError, AttributeError):
+        return False  # скорость рендера, измеренная на этой машине
 
 for _p in (DATA_DIR, PROJECTS_DIR, WHISPER_DIR):
     _p.mkdir(parents=True, exist_ok=True)

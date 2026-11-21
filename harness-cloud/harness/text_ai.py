@@ -13,6 +13,7 @@ import urllib.error
 import urllib.request
 from collections import Counter
 
+from . import config
 from .subtitles import make_hook
 
 API_URL = "https://api.anthropic.com/v1/messages"
@@ -24,6 +25,8 @@ STOP = set("и в во не что он на я с со как а то все о
 
 
 def llm_hook(clip_text: str, content_type: str) -> str | None:
+    if config.offline_mode():
+        return None  # офлайн: только правила
     key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
     if not key or not clip_text.strip():
         return None

@@ -921,6 +921,7 @@
     $("setModel").value = s.whisper_model;
     $("setPreset").value = s.export_preset;
     $("setNotify").checked = !!s.notify;
+    $("setOffline").checked = !!s.offline;
     $("setSaveDir").value = s.save_dir || "";
     $("setQuality").value = s.quality || "1080p";
     $("setFps").value = String(s.fps || 30);
@@ -938,6 +939,7 @@
       quality: $("setQuality").value,
       fps: Number($("setFps").value),
       save_min_score: Number($("setMinScore").value) || 0,
+      offline: $("setOffline").checked,
     };
     try {
       state.settings = await api("/api/settings", { method: "PUT", body });

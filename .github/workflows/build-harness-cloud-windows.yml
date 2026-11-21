@@ -25,6 +25,9 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt pyinstaller scikit-image
 
+      - name: Bundle Whisper models for offline use
+        run: python -c "from faster_whisper import utils as u; [u.download_model(m, output_dir=f'models/whisper/{m}') for m in ('tiny', 'base')]"
+
       - name: "Fetch ffmpeg and ffprobe (Windows static build)"
         shell: pwsh
         run: |

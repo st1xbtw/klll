@@ -17,7 +17,8 @@ from .jobs import JobManager
 
 DEFAULT_SETTINGS = {"theme": "dark", "clip_count": 8, "clip_length": 30, "subtitle_style": "violet",
                     "whisper_model": "base", "export_preset": "tiktok", "notify": True, "save_dir": "",
-                    "quality": "1080p", "fps": 30, "save_min_score": 0}
+                    "quality": "1080p", "fps": 30, "save_min_score": 0,
+                    "offline": False}
 # Нативный выбор папки. Задаёт run.py при запуске окна pywebview; None — выбор недоступен (браузер).
 FOLDER_PICKER = None
 RANGE_RE = re.compile(r"bytes=(\d*)-(\d*)")
@@ -178,6 +179,7 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
         s = {**_read_settings(), **{k: v for k, v in body.items() if k in DEFAULT_SETTINGS}}
         if "save_dir" in s:
             s["save_dir"] = _checked_dir(s["save_dir"])
+        s["offline"] = bool(s.get("offline"))
         if s.get("quality") not in config.QUALITIES:
             s["quality"] = DEFAULT_SETTINGS["quality"]
         s["fps"] = config.parse_fps(s.get("fps")) or DEFAULT_SETTINGS["fps"]
@@ -213,6 +215,9 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
         urls = [u for u in (x.strip() for x in urls_raw) if u]
         if not urls:
             raise HTTPException(400, "Вставьте хотя бы одну ссылку")
+        if config.offline_mode():
+            raise HTTPException(409, "Офлайн-режим включён: загрузка по ссылке недоступна. "
+                                     "Добавьте видеофайл или выключите офлайн-режим в настройках.")
         ctype = _content_type(body.get("content_type"))
         created = []
         for raw in urls:

@@ -13,19 +13,55 @@ from pathlib import Path
 from typing import Callable
 
 from . import config
-from .tools import StepCancelled
+from .tools import StepCancelled, ToolError
 
 MODELS = ("tiny", "base", "small", "medium")
 
 _model_cache: dict[str, object] = {}
 
 
+WHISPER_SIZES = ("tiny", "base", "small", "medium")
+
+
+def model_available(name: str) -> bool:
+    """Модель есть локально: встроена в сборку или уже скачана в папку данных."""
+    if (config.BUNDLED_WHISPER_DIR / name / "model.bin").exists():
+        return True
+    return config.WHISPER_DIR.is_dir() and any(config.WHISPER_DIR.glob(f"*faster-whisper-{name}*"))
+
+
+def installed_models() -> list[str]:
+    return [m for m in WHISPER_SIZES if model_available(m)]
+
+
+def resolve_model(name: str) -> str:
+    """В офлайн-режиме, если выбранной модели нет, берётся установленная (предпочтительно base)."""
+    if not config.offline_mode() or model_available(name):
+        return name
+    have = installed_models()
+    if not have:
+        return name  # дальше понятная ошибка загрузки
+    return "base" if "base" in have else have[-1]
+
+
 def _load_model(name: str):
     if name in _model_cache:
         return _model_cache[name]
     from faster_whisper import WhisperModel
-    model = WhisperModel(name, device="cpu", compute_type="int8",
-                         download_root=str(config.WHISPER_DIR))
+    bundled = config.BUNDLED_WHISPER_DIR / name
+    local = model_available(name)
+    offline = config.offline_mode()
+    if offline and not local:
+        have = ", ".join(installed_models()) or "нет"
+        raise ToolError(f"Модель Whisper «{name}» не установлена. Для офлайн-работы доступны: {have}. "
+                        "Выберите установленную модель или выключите офлайн-режим.")
+    if (bundled / "model.bin").exists():
+        source, kwargs = str(bundled), {}
+    else:
+        source, kwargs = name, {"download_root": str(config.WHISPER_DIR)}
+    # local_files_only: без сети, если модель уже локально или включён офлайн-режим
+    model = WhisperModel(source, device="cpu", compute_type="int8",
+                         local_files_only=local or offline, **kwargs)
     _model_cache[name] = model
     return model
 
@@ -41,6 +77,7 @@ def transcribe(wav: Path, model_name: str, cancel: threading.Event,
 
     if model_name not in MODELS:
         model_name = "base"
+    model_name = resolve_model(model_name)
     try:
         model = _load_model(model_name)
     except Exception as exc:  # нет сети / нет весов / нет библиотеки

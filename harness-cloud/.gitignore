@@ -7,3 +7,4 @@ dist/
 tests/assets/
 docs/_check.zip
 .pytest_cache/
+models/whisper/
