@@ -6,13 +6,14 @@ import os
 import re
 import shutil
 import tempfile
+import time
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import config, fonts, ingest, pipeline, storage, tools, segments as sg
+from . import clipedit, config, fonts, ingest, notify as notify_mod, pipeline, storage, tools, segments as sg
 from .jobs import JobManager
 
 DEFAULT_SETTINGS = {"theme": "dark", "clip_count": 8, "clip_length": 30, "subtitle_style": config.DEFAULT_SUBTITLE_STYLE,
@@ -485,6 +486,46 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
         storage.delete_project(pid)
         return {"ok": True}
 
+    @app.post("/api/projects/{pid}/clips/{idx}/subtitles")
+    async def clip_subtitles(pid: str, idx: int, request: Request):
+        """Правка текста субтитров клипа. Пустой текст возвращает автоматическую расшифровку."""
+        body = await request.json()
+        try:
+            text = clipedit.normalize_text(body.get("text"))
+        except ValueError as exc:
+            raise HTTPException(400, str(exc))
+        proj = _load_idle(pid)
+        clip = _find(proj, idx)
+        if text:
+            d = storage.project_dir(pid)
+            base = clipedit.clip_base_words(clip, clipedit.load_words(d))
+            segs = clip.get("segments") or [[clip["start"], clip["end"]]]
+            clip["sub_words"] = clipedit.retime(text, base, sg.total(segs))
+        else:
+            clip.pop("sub_words", None)
+        clip.update({"file": None, "status": "queued", "error": None})
+        storage.save_project(proj)
+        holder["jobs"].submit(pid, retry=True)
+        return {"ok": True, "words": len(clip.get("sub_words") or [])}
+
+    @app.post("/api/projects/{pid}/clips/{idx}/preview")
+    def clip_preview(pid: str, idx: int):
+        """Собирает предпросмотр первых 4 секунд клипа в 480p с текущими настройками."""
+        proj = _load_idle(pid)
+        clip = _find(proj, idx)
+        try:
+            clipedit.render_preview(proj, clip, storage.project_dir(pid))
+        except tools.ToolError as exc:
+            raise HTTPException(500, str(exc))
+        return {"ok": True, "url": f"/api/projects/{pid}/clips/{idx}/preview/video?v={int(time.time())}"}
+
+    @app.get("/api/projects/{pid}/clips/{idx}/preview/video")
+    def clip_preview_video(pid: str, idx: int, request: Request):
+        path = storage.project_dir(pid) / "clips" / f"{idx:02d}" / "preview.mp4"
+        if not path.exists():
+            raise HTTPException(404, "Предпросмотр ещё не собран")
+        return _ranged_file(path, request, "video/mp4")
+
     @app.get("/api/projects/{pid}/clips/{idx}/video")
     def clip_video(pid: str, idx: int, request: Request):
         proj = storage.load_project(pid)
@@ -576,6 +617,13 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
         except tools.ToolError as exc:
             raise HTTPException(409, str(exc))
         return FileResponse(out, media_type="application/zip", filename=f"{pid}_clips.zip")
+
+    @app.post("/api/notify")
+    async def notify(request: Request):
+        """Системное уведомление о завершении обработки (тост Windows)."""
+        body = await request.json()
+        ok = notify_mod.show(str(body.get("title") or "Harness Cloud"), str(body.get("body") or ""))
+        return {"ok": ok}
 
     @app.get("/api/projects/{pid}/source")
     def source_info(pid: str):

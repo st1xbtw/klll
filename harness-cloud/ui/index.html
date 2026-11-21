@@ -261,6 +261,22 @@
                   <canvas id="timeline" height="54"></canvas>
                 </div>
               </div>
+              <div class="ed-col preview-col">
+                <div class="card-title small">Предпросмотр и текст субтитров</div>
+                <button class="btn btn-ghost btn-sm" id="previewBtn" disabled>Предпросмотр первых 4 с</button>
+                <div class="preview-box" id="previewBox" hidden>
+                  <video id="previewVideo" class="preview-video" controls playsinline></video>
+                </div>
+                <div class="preview-status" id="previewStatus"></div>
+                <label class="field-sm">Текст субтитров
+                  <textarea id="subText" class="input input-sm sub-text" rows="4" disabled></textarea>
+                </label>
+                <div class="trim-btns">
+                  <button class="btn btn-ghost btn-sm" id="subTextSave" disabled>Сохранить текст</button>
+                  <button class="btn btn-ghost btn-sm" id="subTextReset" disabled>Вернуть авто</button>
+                </div>
+                <div class="preview-status">Новый текст раскладывается по таймингам. Если число слов изменилось, слова делятся поровну по длине клипа.</div>
+              </div>
               <div class="ed-col manual" id="manualBox">
                 <div class="card-title small">Ручная правка</div>
                 <button class="btn btn-ghost btn-sm" id="newFromPoint" disabled>Клип с выбранной точки (30 с)</button>

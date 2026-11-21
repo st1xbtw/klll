@@ -235,9 +235,6 @@
     const urls = parseUrls($("urlInput").value);
     if (!urls.length) return toast("Вставьте ссылку или перетащите файл", "err");
     if (urls.some((u) => !URL_RE.test(u))) return toast("Проверьте ссылки: должны начинаться с https://", "err");
-    if (state.settings && state.settings.notify && "Notification" in window && Notification.permission === "default") {
-      try { Notification.requestPermission(); } catch (_) {}
-    }
     try {
       const r = await api("/api/projects", { method: "POST", body: {
         urls, content_type: state.contentType,
@@ -303,8 +300,9 @@
     const ready = (p.clips || []).filter((c) => c.status === "done").length;
     if (p.status === "done") {
       toast(`Готово! Найдено ${ready} клипов`, "ok");
-      if (state.settings && state.settings.notify && "Notification" in window && Notification.permission === "granted") {
-        new Notification("Harness Cloud", { body: `Обработка завершена: ${ready} клипов` });
+      if (state.settings && state.settings.notify) {
+        api("/api/notify", { method: "POST", body: { title: "Harness Cloud", body: `Обработка завершена: ${ready} клипов` } })
+          .catch(() => {});
       }
     } else if (p.status === "error") toast("Ошибка: " + (p.error || "см. детали"), "err");
     else if (p.status === "cancelled") toast("Обработка отменена");
@@ -468,6 +466,12 @@
     const [aw, ah] = (clip.aspect || "9:16").split(":");
     document.querySelector(".phone").style.aspectRatio = `${aw} / ${ah}`;
     updateSubHandle(clip);
+    if (state.subTextFor !== idx) {
+      state.subTextFor = idx;
+      $("subText").value = clip.text || "";
+      $("previewBox").hidden = true;
+      $("previewStatus").textContent = "";
+    }
     refreshSidePanel(clip);
     drawTimeline();
     if (userAction) player.play().catch(() => {});
@@ -497,6 +501,10 @@
     $("trimApply").disabled = !clip.file;
     $("trimReset").disabled = !clip.file;
     $("dlOne").disabled = !clip.file;
+    $("previewBtn").disabled = false;
+    $("subText").disabled = false;
+    $("subTextSave").disabled = false;
+    $("subTextReset").disabled = false;
     const pd = platformData(clip);
     $("descText").textContent = pd.title ? pd.title + "\n" + pd.text : pd.text;
     $("tags").innerHTML = pd.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join("");
@@ -598,6 +606,43 @@
     const v = Number(e.target.value);
     $("trimLbl").textContent = `${fmtTime(0)} — ${fmtTime(30)}  ·  сдвиг ${v > 0 ? "+" : ""}${v.toFixed(1)} с`;
   });
+  async function saveSubText(text) {
+    const clip = selectedClip();
+    if (!clip) return;
+    try {
+      await api(`/api/projects/${encodeURIComponent(state.pid)}/clips/${clip.index}/subtitles`, {
+        method: "POST", body: { text } });
+      toast(text ? "Текст субтитров сохранён, клип пересобирается" : "Возвращена автоматическая расшифровка");
+      startPolling();
+    } catch (e) { toast(e.message, "err"); }
+  }
+  $("subTextSave").addEventListener("click", () => saveSubText($("subText").value));
+  $("subTextReset").addEventListener("click", () => {
+    $("subText").value = "";
+    saveSubText("");
+  });
+  $("previewBtn").addEventListener("click", async () => {
+    const clip = selectedClip();
+    if (!clip) return;
+    const btn = $("previewBtn");
+    btn.disabled = true;
+    $("previewStatus").textContent = "Собираю предпросмотр, это занимает несколько секунд…";
+    try {
+      const r = await api(`/api/projects/${encodeURIComponent(state.pid)}/clips/${clip.index}/preview`, { method: "POST" });
+      const video = $("previewVideo");
+      video.src = r.url;
+      video.load();
+      $("previewBox").hidden = false;
+      $("previewStatus").textContent = "Предпросмотр готов: первые 4 секунды в 480p с текущими настройками.";
+      video.play().catch(() => {});
+    } catch (e) {
+      $("previewStatus").textContent = "";
+      toast(e.message, "err");
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
   $("trimApply").addEventListener("click", async () => {
     const clip = currentClips().find((c) => c.index === state.selected);
     if (!clip) return;

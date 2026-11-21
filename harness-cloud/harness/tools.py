@@ -8,6 +8,7 @@ import subprocess
 from pathlib import Path
 
 from . import config
+from .winproc import hidden_kwargs
 
 
 class StepCancelled(Exception):
@@ -44,7 +45,7 @@ def ffprobe_bin() -> str:
 
 def run(args: list[str], cancel=None, timeout: float | None = None) -> subprocess.CompletedProcess:
     """Запуск процесса с возможностью отмены."""
-    proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, **hidden_kwargs())
     import time
     start = time.time()
     while True:

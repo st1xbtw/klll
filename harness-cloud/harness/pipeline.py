@@ -271,7 +271,9 @@ def _render_one(proj: dict, clip: dict, src: Path, d: Path, words, segments, pre
     ctype = proj["content_type"]
 
     clip_words = sg.words_for_clip(segs, words or [])
-    clip_text = " ".join(w["w"] for w in clip_words)
+    # Текст, который правил пользователь (sub_words), важнее расшифровки: из него строятся субтитры и описание.
+    sub_words = clip.get("sub_words") or None
+    clip_text = " ".join(w["w"] for w in (sub_words or clip_words))
     clip["text"] = clip_text
     sentences = [s["text"] for s in segments
                  if any(a - 0.05 <= s["start"] and s["end"] <= b + 0.05 for a, b in segs) and s["text"]]
@@ -306,7 +308,7 @@ def _render_one(proj: dict, clip: dict, src: Path, d: Path, words, segments, pre
     effect = clip.get("sub_effect") or "none"
     if use_subs or hook or watermark:
         ass = subtitles.build_ass(
-            clip_words, dur, hook or None, clip["style"], cdir / "sub.ass", subtitles=use_subs,
+            sub_words or clip_words, dur, hook or None, clip["style"], cdir / "sub.ass", subtitles=use_subs,
             box=bool(clip.get("sub_box")), anim=bool(clip.get("sub_anim")),
             emoji=bool(clip.get("sub_emoji")), out_w=out_w, out_h=out_h,
             watermark=watermark or None, font=family, pos=pos, effect=effect,

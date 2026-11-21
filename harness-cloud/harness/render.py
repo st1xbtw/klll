@@ -14,6 +14,7 @@ import time
 from pathlib import Path
 
 from . import config, tools
+from .winproc import hidden_kwargs
 from .faces import CropPlan, ffmpeg_crop_expr
 from .tools import ToolError
 
@@ -39,7 +40,8 @@ def _framing_chain(plan: CropPlan | None, framing: str, src_w: int, src_h: int,
 
 
 def _run_ffmpeg(cmd: list[str], cwd: Path, cancel: threading.Event, what: str) -> None:
-    proc = subprocess.Popen(cmd, cwd=str(cwd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    proc = subprocess.Popen(cmd, cwd=str(cwd), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            **hidden_kwargs())
     deadline = time.time() + 1200
     while True:
         try:
