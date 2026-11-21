@@ -12,7 +12,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import config, ingest, pipeline, storage, tools, segments as sg
+from . import config, fonts, ingest, pipeline, storage, tools, segments as sg
 from .jobs import JobManager
 
 DEFAULT_SETTINGS = {"theme": "dark", "clip_count": 8, "clip_length": 30, "subtitle_style": "violet",
@@ -29,6 +29,22 @@ def _read_settings() -> dict:
         except (OSError, json.JSONDecodeError):
             pass
     return dict(DEFAULT_SETTINGS)
+
+
+def _clean_family(value) -> str:
+    """Имя шрифта из запроса: только безопасные символы (оно попадает в строку стиля ASS)."""
+    v = str(value or "").strip()
+    return v if re.fullmatch(r"[\w .\-]{1,60}", v, re.UNICODE) else ""
+
+
+def _pct(value) -> float | None:
+    """Положение субтитров в процентах кадра 0..100; None — стандартное место внизу."""
+    if value in (None, "", "null"):
+        return None
+    try:
+        return round(min(100.0, max(0.0, float(value))), 2)
+    except (TypeError, ValueError):
+        return None
 
 
 def _flag(value) -> bool:
@@ -49,6 +65,10 @@ def _options(payload: dict) -> dict:
         "framing": payload.get("framing") if payload.get("framing") in FRAMINGS else "face",
         "aspect": payload.get("aspect") if payload.get("aspect") in config.ASPECTS else config.DEFAULT_ASPECT,
         "subtitles": _flag(payload["subtitles"]) if "subtitles" in payload else True,
+        "watermark": str(payload.get("watermark") or "").strip()[:40],
+        "sub_font": _clean_family(payload.get("sub_font")),
+        "sub_effect": payload.get("sub_effect") if payload.get("sub_effect") in config.SUB_EFFECTS else "none",
+        "sub_x": _pct(payload.get("sub_x")), "sub_y": _pct(payload.get("sub_y")),
         "sub_box": _flag(payload.get("sub_box")),
         "sub_emoji": _flag(payload.get("sub_emoji")),
         "sub_anim": _flag(payload.get("sub_anim")),
@@ -86,6 +106,25 @@ def _ranged_file(path: Path, request: Request, media: str) -> Response:
 def create_app(jobs: JobManager | None = None) -> FastAPI:
     app = FastAPI(title=config.APP_NAME, version=config.APP_VERSION)
     holder = {"jobs": jobs or JobManager()}
+
+    @app.get("/api/fonts")
+    def list_fonts():
+        return {"fonts": fonts.list_fonts(), "effects": config.SUB_EFFECTS}
+
+    @app.post("/api/fonts")
+    async def upload_font(file: UploadFile = File(...)):
+        """Пользовательский шрифт .ttf/.otf для субтитров."""
+        tmp = Path(tempfile.mkdtemp(prefix="font-")) / "upload"
+        try:
+            with open(tmp, "wb") as fh:
+                shutil.copyfileobj(file.file, fh, length=1024 * 1024)
+            try:
+                item = fonts.add_user_font(tmp, file.filename or "font.ttf")
+            except ValueError as exc:
+                raise HTTPException(400, str(exc))
+            return {"ok": True, "font": item, "fonts": fonts.list_fonts()}
+        finally:
+            shutil.rmtree(tmp.parent, ignore_errors=True)
 
     @app.get("/api/meta")
     def meta():
@@ -156,7 +195,8 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
                      whisper_model: str = Form("base"), export_preset: str = Form("tiktok"),
                      framing: str = Form("face"), sub_box: str = Form("0"),
                      sub_emoji: str = Form("0"), sub_anim: str = Form("0"),
-                     aspect: str = Form("9:16"), subtitles: str = Form("1")):
+                     aspect: str = Form("9:16"), subtitles: str = Form("1"),
+                     watermark: str = Form(""), sub_font: str = Form(""), sub_effect: str = Form("none")):
         ctype = _content_type(content_type)
         suffix = Path(file.filename or "video.mp4").suffix.lower()
         if suffix not in ingest.VIDEO_EXT:
@@ -171,7 +211,8 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
                 "clip_count": clip_count, "subtitle_style": subtitle_style,
                 "whisper_model": whisper_model, "export_preset": export_preset,
                 "framing": framing, "sub_box": sub_box, "sub_emoji": sub_emoji, "sub_anim": sub_anim,
-                "aspect": aspect, "subtitles": subtitles}))
+                "aspect": aspect, "subtitles": subtitles, "watermark": watermark,
+                "sub_font": sub_font, "sub_effect": sub_effect}))
             # Оригинал переносим в папку проекта, исходник не трогаем.
             dest = storage.project_dir(proj["id"]) / ("source" + suffix)
             shutil.copy2(tmp_file, dest)
@@ -219,6 +260,15 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
             proj["options"]["aspect"] = body["aspect"]
         if "subtitles" in body:
             proj["options"]["subtitles"] = _flag(body["subtitles"])
+        if "watermark" in body:
+            proj["options"]["watermark"] = str(body.get("watermark") or "").strip()[:40]
+        if "sub_font" in body:
+            proj["options"]["sub_font"] = _clean_family(body.get("sub_font"))
+        if "sub_effect" in body and body.get("sub_effect") in config.SUB_EFFECTS:
+            proj["options"]["sub_effect"] = body["sub_effect"]
+        if "sub_x" in body or "sub_y" in body:
+            proj["options"]["sub_x"] = _pct(body.get("sub_x"))
+            proj["options"]["sub_y"] = _pct(body.get("sub_y"))
         for flag in ("sub_box", "sub_emoji", "sub_anim"):
             if flag in body:
                 proj["options"][flag] = _flag(body[flag])
@@ -230,6 +280,11 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
             c["sub_emoji"] = bool(proj["options"].get("sub_emoji"))
             c["sub_anim"] = bool(proj["options"].get("sub_anim"))
             c["aspect"] = proj["options"].get("aspect", config.DEFAULT_ASPECT)
+            c["watermark"] = proj["options"].get("watermark", "")
+            c["sub_font"] = proj["options"].get("sub_font", "")
+            c["sub_effect"] = proj["options"].get("sub_effect", "none")
+            c["sub_x"] = proj["options"].get("sub_x")
+            c["sub_y"] = proj["options"].get("sub_y")
             c["subtitles"] = proj["options"].get("subtitles", proj["content_type"] != "game")
             if body.get("subtitle_style") in config.SUBTITLE_STYLES:
                 c["style"] = body["subtitle_style"]
@@ -288,6 +343,10 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
             "segments": segs, "origin": origin,
             "framing": proj["options"].get("framing", "face"),
             "aspect": proj["options"].get("aspect", config.DEFAULT_ASPECT),
+            "watermark": proj["options"].get("watermark", ""),
+            "sub_font": proj["options"].get("sub_font", ""),
+            "sub_effect": proj["options"].get("sub_effect", "none"),
+            "sub_x": proj["options"].get("sub_x"), "sub_y": proj["options"].get("sub_y"),
             "sub_box": bool(proj["options"].get("sub_box")),
             "sub_emoji": bool(proj["options"].get("sub_emoji")),
             "sub_anim": bool(proj["options"].get("sub_anim")),

@@ -7,9 +7,9 @@
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-  <div class="bg-blob b1"></div><div class="bg-blob b2"></div><div class="bg-blob b3"></div>
+  <div class="bg" aria-hidden="true"><span class="orb o1"></span><span class="orb o2"></span><span class="orb o3"></span></div>
 
-  <div class="window glass-window" id="app">
+  <div class="window" id="app">
     <aside class="sidebar glass">
       <div class="brand">
         <div class="logo" data-icon="cloud"></div>
@@ -21,122 +21,155 @@
         <button class="nav-item" data-view="settings"><span data-icon="gear"></span>Настройки</button>
         <button class="nav-item" data-view="about"><span data-icon="info"></span>О приложении</button>
       </nav>
-      <div class="theme-box">
-        <label class="switch-row">
-          <span data-icon="sun"></span>Светлая тема
-          <input type="checkbox" id="themeLight" class="switch">
-        </label>
-        <label class="switch-row">
-          <span data-icon="moon"></span>Тёмная тема
-          <input type="checkbox" id="themeDark" class="switch" checked>
-        </label>
+      <div class="keys card-mini">
+        <div class="mini-title"><span data-icon="star"></span>Быстрые клавиши</div>
+        <div><kbd>Пробел</kbd> — play / pause</div>
+        <div><kbd>Ctrl</kbd> + <kbd>S</kbd> — сохранить</div>
+        <div><kbd>←</kbd> <kbd>→</kbd> — клип назад / вперёд</div>
       </div>
+      <div class="side-foot">Harness Cloud 1.0.0</div>
     </aside>
 
     <main class="main">
       <!-- ============ ГЛАВНАЯ ============ -->
       <section class="view active" id="view-home">
-        <header class="hero">
-          <div>
-            <h1>Создавайте короткие клипы<br>из длинных видео</h1>
-            <p class="sub">Вставьте ссылку или загрузите файл, и мы автоматически найдём лучшие моменты,
-              добавим субтитры и подготовим клипы</p>
+        <header class="topbar">
+          <div class="hero">
+            <h1>Превращайте длинные видео<br>в <span class="grad">вирусные клипы</span></h1>
+            <p class="sub">Автоматический монтаж, субтитры и идеальный кроп</p>
+          </div>
+          <div class="top-right">
+            <label class="theme-toggle" title="Светлая / тёмная тема">
+              <span data-icon="sun"></span>
+              <input type="checkbox" id="themeSwitch" class="theme-input">
+              <span class="track" aria-hidden="true"><span class="knob"></span></span>
+              <span data-icon="moon"></span>
+            </label>
+            <input type="checkbox" id="themeLight" hidden>
+            <input type="checkbox" id="themeDark" hidden checked>
+          </div>
+          <div class="hero-art" aria-hidden="true">
+            <svg viewBox="0 0 320 200">
+              <defs>
+                <linearGradient id="hcg1" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#7fd0ff"/><stop offset="1" stop-color="#2f7bff"/>
+                </linearGradient>
+                <radialGradient id="hcg2" cx="0.5" cy="0.5" r="0.5">
+                  <stop offset="0" stop-color="#3ea2ff" stop-opacity=".55"/><stop offset="1" stop-color="#3ea2ff" stop-opacity="0"/>
+                </radialGradient>
+              </defs>
+              <ellipse cx="160" cy="120" rx="150" ry="58" fill="url(#hcg2)"/>
+              <ellipse cx="160" cy="118" rx="140" ry="40" fill="none" stroke="#5ab4ff" stroke-opacity=".45" stroke-width="2"/>
+              <path d="M92 150a34 34 0 0 1-4-68 52 52 0 0 1 98-14 42 42 0 0 1 8 82z" fill="url(#hcg1)"/>
+              <path d="M146 92l30 18-30 18z" fill="#fff"/>
+            </svg>
           </div>
         </header>
 
-        <div class="home-grid">
-          <div class="left-col">
-            <!-- Источник -->
-            <div class="card glass">
-              <div class="card-title"><span data-icon="link"></span>Источник видео</div>
-              <div class="source-row">
-                <div class="input-wrap">
-                  <input id="urlInput" class="input" type="text" placeholder="https://www.youtube.com/watch?v=..."
-                         autocomplete="off" spellcheck="false">
-                  <button class="icon-btn" id="clearUrl" title="Очистить" data-icon="x"></button>
-                </div>
-                <button class="btn btn-accent" id="loadBtn"><span data-icon="cloud-down"></span>Загрузить</button>
+        <div class="dash">
+          <!-- Источник -->
+          <section class="card area-source">
+            <div class="card-title"><span data-icon="link"></span>Источник видео</div>
+            <div class="source-row">
+              <div class="input-wrap">
+                <input id="urlInput" class="input" type="text" placeholder="Вставьте ссылку на YouTube, Twitch или прямой файл…"
+                       autocomplete="off" spellcheck="false">
+                <button class="icon-btn" id="clearUrl" title="Очистить" data-icon="x"></button>
               </div>
-              <p class="hint" id="urlHint">Можно вставить несколько ссылок: по одной в строке или через пробел</p>
-              <div class="dropzone" id="dropzone" tabindex="0">
-                Или перетащите файл сюда
-                <input type="file" id="fileInput" accept="video/*,.mkv,.ts,.flv,.avi,.m4v" hidden>
+              <button class="btn btn-accent" id="loadBtn">Вставить</button>
+            </div>
+            <p class="hint" id="urlHint">Можно вставить несколько ссылок: по одной в строке или через пробел</p>
+            <div class="dropzone" id="dropzone" tabindex="0">
+              <span data-icon="cloud-down"></span>
+              <span>Перетащите файл сюда или <b class="link">выберите файл</b></span>
+              <input type="file" id="fileInput" accept="video/*,.mkv,.ts,.flv,.avi,.m4v" hidden>
+            </div>
+          </section>
+
+          <!-- Тип контента -->
+          <section class="card area-type">
+            <div class="card-title"><span data-icon="type"></span>Тип контента</div>
+            <div class="chips" id="contentChips">
+              <button class="chip" data-type="podcast"><span data-icon="mic"></span><span>Подкаст<br>/ разговор</span></button>
+              <button class="chip" data-type="game"><span data-icon="gamepad"></span><span>Стрим / Игра</span></button>
+              <button class="chip" data-type="general"><span data-icon="grid"></span><span>Общее</span></button>
+            </div>
+            <p class="hint" id="typeHint"></p>
+          </section>
+
+          <!-- Настройки проекта -->
+          <section class="card settings area-settings">
+            <div class="card-title row-between">
+              <span><span data-icon="wand"></span>Настройки проекта</span>
+              <button class="link-btn" id="advToggle">Расширенные <span data-icon="chev"></span></button>
+            </div>
+            <div class="settings-grid">
+              <label class="field">Пресет экспорта
+                <select id="exportPreset" class="select"></select>
+              </label>
+              <label class="field">Стиль субтитров
+                <select id="subStyle" class="select"></select>
+              </label>
+              <label class="field">Количество клипов
+                <select id="clipCount" class="select">
+                  <option value="5">5</option><option value="6">6</option><option value="7">7</option>
+                  <option value="8" selected>8</option><option value="9">9</option><option value="10">10</option>
+                </select>
+              </label>
+              <label class="field">Длительность клипа
+                <select id="clipLen" class="select" disabled>
+                  <option value="30">30 сек</option>
+                </select>
+              </label>
+            </div>
+            <div class="adv" id="advPanel" hidden>
+              <label class="field">Модель распознавания
+                <select id="whisperModel" class="select">
+                  <option value="tiny">tiny — быстрее, грубее</option>
+                  <option value="base" selected>base — баланс</option>
+                  <option value="small">small — точнее</option>
+                  <option value="medium">medium — самая точная, медленная</option>
+                </select>
+              </label>
+              <label class="field">Кадрирование
+                <select id="framing" class="select">
+                  <option value="face">По лицу — кадр следует за спикером</option>
+                  <option value="fit">Вписать с фоном — весь кадр + размытый фон</option>
+                </select>
+              </label>
+              <label class="field">Формат кадра
+                <select id="aspect" class="select">
+                  <option value="9:16">9:16 — вертикальный (TikTok, Shorts, Reels)</option>
+                  <option value="16:9">16:9 — горизонтальный (YouTube)</option>
+                  <option value="4:3">4:3 — классический</option>
+                  <option value="1:1">1:1 — квадрат</option>
+                </select>
+              </label>
+              <label class="field">Водяной знак (название канала, до 40 символов)
+                <input id="watermark" class="input" maxlength="40" placeholder="например, @my_channel" autocomplete="off">
+              </label>
+              <label class="field">Шрифт субтитров
+                <span class="font-row">
+                  <select id="subFont" class="select"></select>
+                  <button class="btn btn-ghost btn-sm" id="fontBtn" type="button">Загрузить…</button>
+                  <input type="file" id="fontFile" accept=".ttf,.otf" hidden>
+                </span>
+              </label>
+              <label class="field">Эффект субтитров
+                <select id="subEffect" class="select"></select>
+              </label>
+              <div class="field">Субтитры и хук (всегда внизу кадра)
+                <label class="switch-row"><span>Показывать субтитры и хук</span><input type="checkbox" id="subsOn" class="switch" checked></label>
+                <label class="switch-row"><span>Плашка под текстом</span><input type="checkbox" id="subBox" class="switch"></label>
+                <label class="switch-row"><span>Эмодзи к словам</span><input type="checkbox" id="subEmoji" class="switch"></label>
+                <label class="switch-row"><span>Анимация появления слов</span><input type="checkbox" id="subAnim" class="switch"></label>
               </div>
             </div>
-
-            <!-- Тип контента -->
-            <div class="card glass">
-              <div class="card-title"><span data-icon="type"></span>Тип контента</div>
-              <div class="chips" id="contentChips">
-                <button class="chip" data-type="podcast"><span data-icon="mic"></span>Подкаст / разговор</button>
-                <button class="chip" data-type="game"><span data-icon="gamepad"></span>Стрим / Игра</button>
-                <button class="chip" data-type="general"><span data-icon="grid"></span>Общее</button>
-              </div>
-              <p class="hint" id="typeHint"></p>
-            </div>
-
-            <!-- Настройки -->
-            <div class="card glass">
-              <div class="card-title row-between">
-                <span><span data-icon="gear"></span>Настройки</span>
-                <button class="link-btn" id="advToggle">Расширенные настройки <span data-icon="chev"></span></button>
-              </div>
-              <div class="settings-grid">
-                <label class="field">Количество клипов
-                  <select id="clipCount" class="select">
-                    <option value="5">5</option><option value="6">6</option><option value="7">7</option>
-                    <option value="8" selected>8</option><option value="9">9</option><option value="10">10</option>
-                  </select>
-                </label>
-                <label class="field">Длительность клипа
-                  <select id="clipLen" class="select" disabled>
-                    <option value="30">30 сек</option>
-                  </select>
-                </label>
-                <label class="field">Стиль субтитров
-                  <select id="subStyle" class="select"></select>
-                </label>
-              </div>
-              <div class="adv" id="advPanel" hidden>
-                <label class="field">Модель распознавания
-                  <select id="whisperModel" class="select">
-                    <option value="tiny">tiny — быстрее, грубее</option>
-                    <option value="base" selected>base — баланс</option>
-                    <option value="small">small — точнее</option>
-                    <option value="medium">medium — самая точная, медленная</option>
-                  </select>
-                </label>
-                <label class="field">Пресет экспорта
-                  <select id="exportPreset" class="select"></select>
-                </label>
-                <label class="field">Кадрирование
-                  <select id="framing" class="select">
-                    <option value="face">По лицу — кадр 9:16 следует за спикером</option>
-                    <option value="fit">Вписать с фоном — весь кадр + размытый фон</option>
-                  </select>
-                </label>
-                <label class="field">Формат кадра
-                  <select id="aspect" class="select">
-                    <option value="9:16">9:16 — вертикальный (TikTok, Shorts, Reels)</option>
-                    <option value="16:9">16:9 — горизонтальный (YouTube)</option>
-                    <option value="4:3">4:3 — классический</option>
-                    <option value="1:1">1:1 — квадрат</option>
-                  </select>
-                </label>
-                <div class="field">Субтитры и хук (всегда внизу кадра)
-                  <label class="switch-row"><span>Показывать субтитры и хук</span><input type="checkbox" id="subsOn" class="switch" checked></label>
-                  <label class="switch-row"><span>Плашка под текстом</span><input type="checkbox" id="subBox" class="switch"></label>
-                  <label class="switch-row"><span>Эмодзи к словам</span><input type="checkbox" id="subEmoji" class="switch"></label>
-                  <label class="switch-row"><span>Анимация появления слов</span><input type="checkbox" id="subAnim" class="switch"></label>
-                </div>
-              </div>
-            </div>
-
             <button class="btn btn-primary btn-xl" id="startBtn"><span data-icon="wand"></span>Начать обработку<span data-icon="chev-r"></span></button>
-          </div>
+          </section>
 
           <!-- Предпросмотр -->
-          <div class="card glass preview-card">
+          <section class="card preview area-preview">
             <div class="card-title row-between">
               <span><span data-icon="play"></span>Предпросмотр клипа</span>
               <span class="pager">
@@ -145,9 +178,12 @@
                 <button class="icon-btn" id="nextClip" data-icon="chev-r" title="Следующий"></button>
               </span>
             </div>
-            <div class="phone">
-              <video id="player" playsinline preload="metadata"></video>
-              <div class="phone-empty" id="phoneEmpty">Клип появится здесь после обработки</div>
+            <div class="phone-wrap">
+              <div class="phone">
+                <video id="player" playsinline preload="metadata"></video>
+                <div class="phone-empty" id="phoneEmpty">Клип появится здесь после обработки</div>
+                <div class="sub-handle" id="subHandle" hidden title="Перетащите, чтобы сдвинуть субтитры">Субтитры</div>
+              </div>
             </div>
             <div class="player-bar">
               <button class="icon-btn" id="playBtn" data-icon="play" title="Пробел — воспроизведение"></button>
@@ -156,67 +192,78 @@
               <button class="icon-btn" id="muteBtn" data-icon="vol" title="Звук"></button>
               <button class="icon-btn" id="fsBtn" data-icon="fs" title="На весь экран"></button>
             </div>
-          </div>
-        </div>
+            <div class="sub-foot">
+              <span class="hint">Перетащите «Субтитры» в превью. Клипы перерендерятся после отпускания.</span>
+              <button class="btn btn-ghost btn-sm" id="subReset" type="button">Вернуть вниз</button>
+            </div>
+          </section>
 
-        <!-- Результаты -->
-        <section class="card glass results" id="results">
-          <div class="results-head">
-            <div class="card-title"><span data-icon="bars"></span>Результаты обработки</div>
-            <div class="results-right">
-              <span class="status" id="statusLine"><span class="dot"></span><span id="statusText">Нет проекта</span></span>
-              <button class="btn btn-accent" id="zipBtn" disabled><span data-icon="download"></span>Скачать всё</button>
-              <div class="menu-wrap">
-                <button class="icon-btn" id="moreBtn" data-icon="dots" title="Ещё"></button>
-                <div class="menu glass" id="moreMenu" hidden>
-                  <button data-act="copyall">Скопировать все описания</button>
-                  <button data-act="retry">Повторить с ошибочного шага</button>
-                  <button data-act="cancel">Отменить обработку</button>
-                  <button data-act="delete" class="danger">Удалить проект</button>
+          <!-- Обработка -->
+          <section class="card processing area-proc" id="procCard">
+            <div class="card-title row-between">
+              <span><span data-icon="play"></span>Обработка видео</span>
+              <span class="pct" id="procPct">—</span>
+            </div>
+            <div class="progress" id="progressWrap" hidden><div class="progress-bar" id="progressBar"></div></div>
+            <div class="proc-body">
+              <ol class="steps" id="procSteps"></ol>
+              <div class="proc-side">
+                <div class="waves" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+                <div class="found" id="procFound">Ждём видео</div>
+                <button class="btn btn-ghost" id="cancelBtn" disabled><span class="box"></span>Отменить</button>
+              </div>
+            </div>
+          </section>
+
+          <!-- Результаты -->
+          <section class="card results area-results" id="results">
+            <div class="results-head">
+              <div class="card-title"><span data-icon="trophy"></span>Готовые клипы</div>
+              <div class="results-right">
+                <span class="status" id="statusLine"><span class="dot"></span><span id="statusText">Нет проекта</span></span>
+                <button class="btn btn-accent" id="zipBtn" disabled><span data-icon="download"></span>Скачать всё</button>
+                <div class="menu-wrap">
+                  <button class="icon-btn" id="moreBtn" data-icon="dots" title="Ещё"></button>
+                  <div class="menu glass" id="moreMenu" hidden>
+                    <button data-act="copyall">Скопировать все описания</button>
+                    <button data-act="retry">Повторить с ошибочного шага</button>
+                    <button data-act="cancel">Отменить обработку</button>
+                    <button data-act="delete" class="danger">Удалить проект</button>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-          <div class="progress" id="progressWrap" hidden><div class="progress-bar" id="progressBar"></div></div>
-          <div class="warn" id="warnBox" hidden></div>
-
-          <div class="results-body">
+            <div class="warn" id="warnBox" hidden></div>
             <div class="clip-list" id="clipList">
               <div class="empty">Запустите обработку, и здесь появятся клипы</div>
             </div>
-            <aside class="side-panel glass" id="sidePanel">
-              <div class="card-title"><span data-icon="scissors"></span>Обрезка клипа</div>
-              <div class="trim">
+          </section>
+
+          <!-- Редактирование клипа -->
+          <section class="card editor area-editor glass" id="sidePanel">
+            <div class="card-title"><span data-icon="scissors"></span>Редактирование клипа</div>
+            <div class="editor-grid">
+              <div class="ed-col">
+                <div class="card-title small">Сдвиг начала (±3 с)</div>
                 <input type="range" id="trim" class="range" min="-3" max="3" step="0.1" value="0" disabled>
                 <div class="trim-lbl" id="trimLbl">0:00 — 0:30</div>
                 <div class="trim-btns">
                   <button class="btn btn-ghost btn-sm" id="trimApply" disabled>Применить</button>
                   <button class="btn btn-ghost btn-sm" id="trimReset" disabled>Сбросить</button>
                 </div>
-              </div>
-              <button class="collapse" id="descToggle"><span data-icon="doc"></span>Описание и хештеги<span data-icon="chev"></span></button>
-              <div class="desc" id="descBody" hidden>
-                <div class="ptabs" id="platformTabs">
-                  <button class="ptab active" data-plat="tiktok">TikTok</button>
-                  <button class="ptab" data-plat="shorts">Shorts</button>
-                  <button class="ptab" data-plat="reels">Reels</button>
+                <div class="timeline-wrap">
+                  <div class="card-title small">Сила момента · клик по шкале — точка для нового клипа</div>
+                  <canvas id="timeline" height="54"></canvas>
                 </div>
-                <p id="descText" class="desc-text">—</p>
-                <div class="tags" id="tags"></div>
-                <button class="btn btn-ghost btn-sm" id="copyDesc"><span data-icon="copy"></span>Копировать описание и хештеги</button>
               </div>
-              <div class="timeline-wrap">
-                <div class="card-title small">Сила момента на таймлайне · клик — точка для нового клипа</div>
-                <canvas id="timeline" height="54"></canvas>
-              </div>
-              <div class="manual" id="manualBox">
+              <div class="ed-col manual" id="manualBox">
                 <div class="card-title small">Ручная правка</div>
                 <button class="btn btn-ghost btn-sm" id="newFromPoint" disabled>Клип с выбранной точки (30 с)</button>
                 <div class="cut-row">
                   <label class="field-sm">С, сек <input id="cutA" class="input input-sm" type="number" min="0" step="0.5"></label>
                   <label class="field-sm">По, сек <input id="cutB" class="input input-sm" type="number" min="0" step="0.5"></label>
                 </div>
-                <button class="btn btn-ghost btn-sm" id="cutBtn" disabled>Вырезать этот фрагмент из клипа</button>
+                <button class="btn btn-ghost btn-sm" id="cutBtn" disabled>Вырезать этот фрагмент</button>
                 <div class="cut-row">
                   <label class="field-sm">Склеить с клипом
                     <select id="mergeWith" class="select select-sm"></select>
@@ -224,21 +271,34 @@
                 </div>
                 <button class="btn btn-ghost btn-sm" id="mergeBtn" disabled>Склеить два клипа</button>
               </div>
-              <button class="btn btn-accent btn-sm" id="dlOne" disabled><span data-icon="download"></span>Скачать этот клип</button>
-            </aside>
-          </div>
-        </section>
+              <div class="ed-col">
+                <button class="collapse" id="descToggle"><span data-icon="doc"></span>Описание и хештеги<span data-icon="chev"></span></button>
+                <div class="desc" id="descBody" hidden>
+                  <div class="ptabs" id="platformTabs">
+                    <button class="ptab active" data-plat="tiktok">TikTok</button>
+                    <button class="ptab" data-plat="shorts">Shorts</button>
+                    <button class="ptab" data-plat="reels">Reels</button>
+                  </div>
+                  <p id="descText" class="desc-text">—</p>
+                  <div class="tags" id="tags"></div>
+                  <button class="btn btn-ghost btn-sm" id="copyDesc"><span data-icon="copy"></span>Копировать</button>
+                </div>
+                <button class="btn btn-accent btn-sm" id="dlOne" disabled><span data-icon="download"></span>Скачать этот клип</button>
+              </div>
+            </div>
+          </section>
+        </div>
       </section>
 
       <!-- ============ ИСТОРИЯ ============ -->
       <section class="view" id="view-history">
-        <header class="hero"><div><h1>История</h1><p class="sub">Все проекты: откройте, повторите или удалите</p></div></header>
+        <header class="topbar"><div class="hero"><h1>История</h1><p class="sub">Все проекты: откройте, повторите или удалите</p></div></header>
         <div class="card glass" id="historyList"></div>
       </section>
 
       <!-- ============ НАСТРОЙКИ ============ -->
       <section class="view" id="view-settings">
-        <header class="hero"><div><h1>Настройки</h1><p class="sub">Значения по умолчанию для новых проектов. Ctrl+S — сохранить</p></div></header>
+        <header class="topbar"><div class="hero"><h1>Настройки</h1><p class="sub">Значения по умолчанию для новых проектов. Ctrl+S — сохранить</p></div></header>
         <div class="card glass settings-page">
           <label class="field">Тема
             <select id="setTheme" class="select"><option value="dark">Тёмная</option><option value="light">Светлая</option></select>
@@ -270,9 +330,9 @@
 
       <!-- ============ О ПРИЛОЖЕНИИ ============ -->
       <section class="view" id="view-about">
-        <header class="hero"><div><h1>О приложении</h1><p class="sub" id="aboutSub">Harness Cloud</p></div></header>
+        <header class="topbar"><div class="hero"><h1>О приложении</h1><p class="sub" id="aboutSub">Harness Cloud</p></div></header>
         <div class="card glass about">
-          <p>Режет длинные подкасты, стримы и видео на вертикальные клипы 1080×1920, 30 с, H.264 + AAC.</p>
+          <p>Режет длинные подкасты, стримы и видео на клипы 30 с: 9:16, 16:9, 4:3 или 1:1, H.264 + AAC.</p>
           <p>Используйте только видео, на которые у вас есть права.</p>
           <p id="aboutMeta" class="hint"></p>
         </div>

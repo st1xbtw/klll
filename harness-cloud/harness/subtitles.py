@@ -118,19 +118,45 @@ def _margin(out_h: int, px_at_1920: float) -> int:
     return max(20, round(out_h * px_at_1920 / 1920))
 
 
+def _tags(effect: str, px: float, py: float, out_h: int, pos_given: bool, hook: bool) -> str:
+    """Теги позиции и эффекта одной реплики. Якорь — нижний центр строки (alignment 2)."""
+    parts = []
+    if effect == "slide":
+        d = _margin(out_h, 80)
+        parts.append(f"\\move({px:.0f},{py + d:.0f},{px:.0f},{py:.0f},0,220)")
+    elif pos_given:
+        parts.append(f"\\pos({px:.0f},{py:.0f})")
+    if effect == "fade" and not hook:
+        parts.append("\\fad(150,150)")
+    if effect == "glow":
+        parts.append("\\blur2")
+    return "{" + "".join(parts) + "}" if parts else ""
+
+
 def build_ass(words: list[dict], clip_len: float, hook_text: str | None,
               style_key: str, out: Path, subtitles: bool = True, box: bool = False,
               anim: bool = False, emoji: bool = False,
-              out_w: int = config.OUT_W, out_h: int = config.OUT_H) -> Path:
+              out_w: int = config.OUT_W, out_h: int = config.OUT_H,
+              watermark: str | None = None, font: str | None = None,
+              pos: tuple[float, float] | None = None, effect: str = "none") -> Path:
+    """pos — (x, y) в пикселях кадра для нижнего центра строки субтитров; None — стандартное место внизу.
+    font — имя семейства (шрифт должен лежать в fontsdir), effect — none|fade|slide|glow|pop."""
     """words: слова клипа с временами уже в секундах от начала клипа.
 
     Субтитры и хук выводятся только внизу кадра (выравнивание 2 — нижний центр).
     Хук стоит над строкой субтитров, если они включены."""
     style = config.SUBTITLE_STYLES.get(style_key, config.SUBTITLE_STYLES["violet"])
     highlight = style["highlight"]
+    family = font or style["font"]
+    if effect == "pop":
+        anim = True
     align = 2
     margin = _margin(out_h, _SAFE_LOWER_MARGIN)
     hook_margin = margin + (_margin(out_h, _HOOK_LIFT) if subtitles and words else 0)
+    pos_given = pos is not None
+    px, py = pos if pos_given else (out_w / 2, out_h - margin)
+    lift = _margin(out_h, _HOOK_LIFT) if subtitles and words else 0
+    hook_y = py - lift
 
     header = [
         "[Script Info]",
@@ -145,11 +171,14 @@ def build_ass(words: list[dict], clip_len: float, hook_text: str | None,
         "Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, "
         "Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
         # Подложка: непрозрачный бокс (BorderStyle 3) полупрозрачного чёрного цвета.
-        _style_line("Sub", style["font"], 92, highlight, "&H00FFFFFF&",
+        _style_line("Sub", family, 92, highlight, "&H00FFFFFF&",
                     "&HA0000000&" if box else "&H00000000&",
                     "&H66000000&", 3 if box else 1, 20 if box else 7, 0 if box else 2, align, margin),
-        _style_line("Hook", style["font"], 70, "&H00000000&", "&H00000000&", "&H0000E5FF&",
+        _style_line("Hook", family, 70, "&H00000000&", "&H00000000&", "&H0000E5FF&",
                     "&H00000000&", 3, 22, 0, align, hook_margin),
+        # Водяной знак: название канала в правом верхнем углу, весь клип.
+        _style_line("Mark", family, 44, "&HE6FFFFFF&", "&H00FFFFFF&", "&H00000000&",
+                    "&H00000000&", 1, 3, 0, 9, _margin(out_h, 90)),
         "",
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
@@ -165,13 +194,20 @@ def build_ass(words: list[dict], clip_len: float, hook_text: str | None,
             if e <= s:
                 continue
             text = _karaoke_text(group, s, emoji=emoji, anim=anim)
-            lines.append(f"Dialogue: 0,{_ts(s)},{_ts(e)},Sub,,0,0,0,,{text}")
+            tags = _tags(effect, px, py, out_h, pos_given, hook=False)
+            lines.append(f"Dialogue: 0,{_ts(s)},{_ts(e)},Sub,,0,0,0,,{tags}{text}")
 
     if hook_text:
         hook = "\\N".join(_wrap_words(_esc(hook_text).strip(), HOOK_LINE_CHARS))
+        htags = _tags(effect, px, hook_y, out_h, pos_given or lift > 0, hook=True)
+        inner = htags[1:-1] if htags else ""
         lines.append(
             f"Dialogue: 1,{_ts(0.0)},{_ts(HOOK_DURATION)},Hook,,0,0,0,,"
-            f"{{\\fad(150,300)\\fscx100\\fscy100}}{hook}")
+            f"{{{inner}\\fad(150,300)\\fscx100\\fscy100}}{hook}")
+
+    if watermark:
+        mark = _esc(watermark.strip()[:40])
+        lines.append(f"Dialogue: 2,{_ts(0.0)},{_ts(clip_len)},Mark,,0,0,0,,{mark}")
 
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("\n".join(lines) + "\n", encoding="utf-8-sig")

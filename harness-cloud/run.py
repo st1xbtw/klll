@@ -55,6 +55,31 @@ def _ensure_std_streams() -> None:
             sys.stderr = log
 
 
+def _window_failed(reason: str, server, url: str) -> int:
+    """Собранное приложение не открывает браузер: показываем ошибку окном. Из исходников — запасной браузер."""
+    if getattr(sys, "frozen", False):
+        msg = (f"{reason}\n\nЕсли нет WebView2, установите «Microsoft Edge WebView2 Runtime» "
+               f"с сайта Microsoft и запустите приложение снова.\nЛог: {config.DATA_DIR}")
+        print(msg, file=sys.stderr, flush=True)
+        if sys.platform == "win32":
+            try:
+                import ctypes
+                ctypes.windll.user32.MessageBoxW(None, msg, config.APP_NAME, 0x10)
+            except Exception:
+                pass
+        server.should_exit = True
+        return 1
+    print(f"{reason}; открываю браузер.", file=sys.stderr, flush=True)
+    webbrowser.open(url)
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        pass
+    server.should_exit = True
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     _ensure_std_streams()
     ap = argparse.ArgumentParser(description=config.APP_NAME)
@@ -79,13 +104,16 @@ def main(argv: list[str] | None = None) -> int:
 
     if not args.browser:
         try:
-            import webview  # pywebview: окно на нативном WebView
+            import webview  # pywebview: окно на нативном WebView (WebView2 на Windows)
+        except Exception as exc:
+            return _window_failed(f"Не найден модуль окна pywebview: {exc}", server, url)
+        try:
             webview.create_window(config.APP_NAME, url, width=1280, height=820, min_size=(960, 640))
             webview.start()
-            server.should_exit = True
-            return 0
-        except Exception as exc:  # нет GUI / нет WebView — не падаем
-            print(f"Окно недоступно ({exc}); открываю браузер.", file=sys.stderr)
+        except Exception as exc:
+            return _window_failed(f"Окно приложения не открылось: {exc}", server, url)
+        server.should_exit = True
+        return 0
 
     webbrowser.open(url)
     try:

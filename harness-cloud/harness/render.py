@@ -61,13 +61,18 @@ def _run_ffmpeg(cmd: list[str], cwd: Path, cancel: threading.Event, what: str) -
 def _encode_args(preset_key: str, fast: bool = False) -> list[str]:
     preset = config.EXPORT_PRESETS.get(preset_key, config.EXPORT_PRESETS["tiktok"])
     if fast:  # промежуточные отрезки: быстрее и без потерь для последующей склейки
-        return ["-c:v", "libx264", "-preset", "veryfast", "-crf", "17", "-pix_fmt", "yuv420p",
+        return ["-c:v", "libx264", "-preset", "superfast", "-crf", "18", "-pix_fmt", "yuv420p",
                 "-r", str(config.OUT_FPS), "-c:a", "aac", "-b:a", "192k", "-ac", "2", "-ar", "48000"]
-    return ["-c:v", "libx264", "-preset", "medium", "-crf", str(preset["crf"]),
+    return ["-c:v", "libx264", "-preset", "veryfast", "-crf", str(preset["crf"]),
             "-maxrate", preset["video_bitrate"], "-bufsize", "2M",
             "-profile:v", "high", "-pix_fmt", "yuv420p", "-r", str(config.OUT_FPS),
             "-c:a", "aac", "-b:a", preset["audio_bitrate"], "-ac", "2", "-ar", "48000",
             "-movflags", "+faststart"]
+
+
+def _fontsdir(clip_dir: Path) -> str:
+    """Опция fontsdir для фильтра ass: шрифты, скопированные в папку клипа (относительный путь)."""
+    return ":fontsdir=fonts" if (clip_dir / "fonts").is_dir() else ""
 
 
 def render_clip(src: Path, start: float, duration: float, plan: CropPlan | None,
@@ -78,7 +83,7 @@ def render_clip(src: Path, start: float, duration: float, plan: CropPlan | None,
     out.parent.mkdir(parents=True, exist_ok=True)
     chain = _framing_chain(plan, framing, src_w, src_h, out_w, out_h)
     if ass_file is not None:
-        chain = chain[:-len("[v0]")] + f"[v0];[v0]ass={ass_file.name}[v]"
+        chain = chain[:-len("[v0]")] + f"[v0];[v0]ass={ass_file.name}{_fontsdir(out.parent)}[v]"
     else:
         chain = chain[:-len("[v0]")] + "[v0];[v0]null[v]"
     cmd = [tools.ffmpeg_bin(), "-y", "-v", "error",
@@ -113,7 +118,7 @@ def render_segments(src: Path, segments: list[tuple[float, float]], plans: list[
         inputs += ["-i", str(p.resolve())]
     fc = "".join(f"[{i}:v][{i}:a]" for i in range(n)) + f"concat=n={n}:v=1:a=1[cv][ca]"
     if ass_file is not None:
-        fc += f";[cv]ass={ass_file.name}[v]"
+        fc += f";[cv]ass={ass_file.name}{_fontsdir(out.parent)}[v]"
         vmap = "[v]"
     else:
         fc += ";[cv]null[v]"

@@ -73,10 +73,12 @@ def run() -> int:
         ok("история: «Открыть» возвращает на главную")
 
         # Тема
-        page.locator("#themeLight").check()
-        expect(page.locator("html")).to_have_attribute("data-theme", "light")
-        page.locator("#themeDark").check()
-        expect(page.locator("html")).to_have_attribute("data-theme", "dark")
+        start = page.locator("html").get_attribute("data-theme")
+        other = "light" if start == "dark" else "dark"
+        page.locator(".theme-toggle").click()
+        expect(page.locator("html")).to_have_attribute("data-theme", other)
+        page.locator(".theme-toggle").click()
+        expect(page.locator("html")).to_have_attribute("data-theme", start)
         ok("переключатели светлой/тёмной темы")
 
         # Тип контента

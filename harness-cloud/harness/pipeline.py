@@ -13,7 +13,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import audio, config, faces, ingest, render, scoring, segments as sg, storage, subtitles, text_ai, tools, transcribe
+from . import audio, config, faces, fonts, ingest, render, scoring, segments as sg, storage, subtitles, text_ai, tools, transcribe
 from .tools import StepCancelled, ToolError
 
 STEPS = ["source", "audio", "transcribe", "analyze", "clips"]
@@ -27,20 +27,39 @@ STEP_LABELS = {
 
 
 class Reporter:
+    """Все изменения проекта идут через этот класс под одной блокировкой (рендер параллельный)."""
+
     def __init__(self, proj: dict):
         self.proj = proj
+        self.lock = threading.RLock()
 
     def stage(self, step: str, frac: float = 0.0, text: str = "") -> None:
-        self.proj["stage"] = STEP_LABELS.get(step, step) + (f": {text}" if text else "")
-        self.proj["progress"] = round(frac, 3)
-        storage.save_project(self.proj)
+        with self.lock:
+            self.proj["stage"] = STEP_LABELS.get(step, step) + (f": {text}" if text else "")
+            self.proj["progress"] = round(frac, 3)
+            storage.save_project(self.proj)
 
     def clip(self, idx: int, status: str, error: str | None = None) -> None:
-        for c in self.proj["clips"]:
-            if c["index"] == idx:
-                c["status"] = status
-                c["error"] = error
-        storage.save_project(self.proj)
+        with self.lock:
+            for c in self.proj["clips"]:
+                if c["index"] == idx:
+                    c["status"] = status
+                    c["error"] = error
+            storage.save_project(self.proj)
+
+    def finish(self, idx: int, result: dict, error: str | None) -> None:
+        with self.lock:
+            for c in self.proj["clips"]:
+                if c["index"] != idx:
+                    continue
+                if error is None:
+                    c.update(result)
+                    c["status"], c["error"] = "done", None
+                else:
+                    c["status"], c["error"] = "error", error
+                    self.proj["warnings"].append(f"Клип {idx}: {error}")
+                break
+            storage.save_project(self.proj)
 
 
 def _pdir(pid: str) -> Path:
@@ -171,22 +190,39 @@ def run(pid: str, cancel: threading.Event, retry: bool = False) -> dict:
         step = "clips"
         preset = proj["options"].get("export_preset", "tiktok")
         total = len(proj["clips"])
-        rep.stage("clips", 0.0, f"0/{total}")
-        for i, clip in enumerate(proj["clips"]):
+        pending = [c for c in proj["clips"]
+                   if not (c.get("status") == "done" and c.get("file") and (d / c["file"]).exists())]
+        finished = total - len(pending)
+        rep.stage("clips", finished / max(total, 1), f"{finished}/{total}")
+
+        def work(idx: int) -> tuple[int, dict, str | None]:
+            """Рендер в своей копии клипа: проект трогает только Reporter.finish."""
             _checkpoint(cancel)
-            if clip.get("status") == "done" and clip.get("file") and (d / clip["file"]).exists():
-                continue
-            rep.clip(clip["index"], "processing")
+            rep.clip(idx, "processing")
+            clip = next(c for c in proj["clips"] if c["index"] == idx)
+            copy = dict(clip)
             try:
-                _render_one(proj, clip, src, d, words, segments, preset, cancel)
-                rep.clip(clip["index"], "done")
+                _render_one(proj, copy, src, d, words, segments, preset, cancel)
+                return idx, copy, None
             except StepCancelled:
                 raise
             except Exception as exc:  # один клип не валит весь проект
-                msg = str(exc)[:400]
-                rep.clip(clip["index"], "error", msg)
-                proj["warnings"].append(f"Клип {clip['index']}: {msg}")
-            rep.stage("clips", (i + 1) / total, f"{i + 1}/{total}")
+                return idx, copy, str(exc)[:400]
+
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        workers = min(config.render_workers(), max(1, len(pending)))
+        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="clip") as ex:
+            futs = [ex.submit(work, c["index"]) for c in pending]
+            try:
+                for fut in as_completed(futs):
+                    idx, result, err = fut.result()
+                    rep.finish(idx, result, err)
+                    finished += 1
+                    rep.stage("clips", finished / max(total, 1), f"{finished}/{total}")
+            except StepCancelled:
+                for f in futs:
+                    f.cancel()
+                raise
         done.add("clips")
         _mark(proj, done)
 
@@ -255,11 +291,18 @@ def _render_one(proj: dict, clip: dict, src: Path, d: Path, words, segments, pre
     clip["hook_source"] = hook_src if hook else ""
 
     ass = None
-    if use_subs or hook:
+    watermark = (clip.get("watermark") or "").strip()
+    family = fonts.copy_for_clip(clip.get("sub_font"), cdir)
+    pos = None
+    if clip.get("sub_x") is not None and clip.get("sub_y") is not None:
+        pos = (float(clip["sub_x"]) / 100 * out_w, float(clip["sub_y"]) / 100 * out_h)
+    effect = clip.get("sub_effect") or "none"
+    if use_subs or hook or watermark:
         ass = subtitles.build_ass(
             clip_words, dur, hook or None, clip["style"], cdir / "sub.ass", subtitles=use_subs,
             box=bool(clip.get("sub_box")), anim=bool(clip.get("sub_anim")),
-            emoji=bool(clip.get("sub_emoji")), out_w=out_w, out_h=out_h)
+            emoji=bool(clip.get("sub_emoji")), out_w=out_w, out_h=out_h,
+            watermark=watermark or None, font=family, pos=pos, effect=effect)
     out = cdir / "clip.mp4"
     if len(segs) == 1:
         res = render.render_clip(src, start, dur, plans[0], ass, out, preset, cancel,

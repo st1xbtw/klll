@@ -1,0 +1,6 @@
+Встроенные шрифты Harness Cloud (для субтитров):
+- Inter (Inter-Regular.otf, Inter-Bold.otf) — SIL Open Font License 1.1
+- Roboto (Roboto-Variable.ttf) — SIL Open Font License 1.1
+- Open Sans (OpenSans-Variable.ttf) — SIL Open Font License 1.1
+- DejaVu Sans (DejaVuSans.ttf, DejaVuSans-Bold.ttf) — Bitstream Vera License / public domain changes
+Пользовательские шрифты загружаются в папку данных приложения; лицензию на них несёт пользователь.

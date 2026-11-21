@@ -75,11 +75,15 @@ def test_subtitles_and_hook_always_bottom(tmp_path):
                                  out_w=w, out_h=h).read_text(encoding="utf-8")
             assert f"PlayResX: {w}" in text and f"PlayResY: {h}" in text
             style_lines = [l for l in text.splitlines() if l.startswith("Style:")]
-            assert len(style_lines) == 2
+            assert len(style_lines) == 3              # Sub, Hook, Mark
             for line in style_lines:
                 fields = line.split(",")
-                assert fields[18] == "2", line          # Alignment: нижний центр
-                assert int(fields[21]) > 0, line        # MarginV: отступ от низа
+                name = fields[0].split(":")[1].strip()
+                if name == "Mark":
+                    assert fields[18] == "9", line      # водяной знак: верхний правый угол
+                else:
+                    assert fields[18] == "2", line      # субтитры и хук: нижний центр
+                    assert int(fields[21]) > 0, line    # MarginV: отступ от низа
             assert "\\an8" not in text and "\\an5" not in text
 
 
@@ -93,3 +97,62 @@ def test_subtitles_off_removes_text_and_hook(tmp_path):
     text2 = sub.build_ass(words, 30, None, "violet", tmp_path / "off2.ass",
                           subtitles=False).read_text(encoding="utf-8")
     assert "Dialogue:" not in text2
+
+
+def test_watermark_top_right_whole_clip(tmp_path):
+    """Водяной знак: стиль Mark, выравнивание 9 (верхний правый угол), на весь клип, экранируется."""
+    from harness import subtitles as sub
+    text = sub.build_ass([], 30, None, "violet", tmp_path / "wm.ass", subtitles=False,
+                         watermark="{@канал}\\x").read_text(encoding="utf-8")
+    mark_style = [l for l in text.splitlines() if l.startswith("Style: Mark")][0]
+    assert mark_style.split(",")[18] == "9"
+    dialog = [l for l in text.splitlines() if ",Mark,," in l]
+    assert len(dialog) == 1 and dialog[0].startswith("Dialogue: 2,0:00:00.00,0:00:30.00")
+    assert "{" not in dialog[0].split(",,", 1)[1] and "\\x" not in dialog[0]
+
+
+def test_font_position_effects_in_ass(tmp_path):
+    from harness import subtitles as sub
+    words = [{"w": "секрет", "s": 0.2, "e": 0.6}, {"w": "денег", "s": 0.7, "e": 1.1}]
+    # шрифт попадает в стили всех строк
+    ass = sub.build_ass(words, 30, "Хук", "violet", tmp_path / "f.ass", font="DejaVu Sans",
+                        out_w=1080, out_h=1920).read_text(encoding="utf-8")
+    assert ass.count("Style: Sub,DejaVu Sans,") == 1 and ",DejaVu Sans,70," in ass
+    # по умолчанию субтитры не получают \pos — стандартное место внизу
+    dlg = [l for l in ass.splitlines() if l.startswith("Dialogue: 0,")][0]
+    assert "\\pos(" not in dlg and "\\move(" not in dlg
+    # позиция: \pos в каждой реплике субтитров
+    moved = sub.build_ass(words, 30, None, "violet", tmp_path / "p.ass", pos=(300.0, 900.0),
+                          out_w=1080, out_h=1920).read_text(encoding="utf-8")
+    assert all("\\pos(300,900)" in l for l in moved.splitlines() if l.startswith("Dialogue: 0,"))
+    # эффекты: плавное появление, выезд, свечение, всплеск (= анимация слов)
+    fade = sub.build_ass(words, 30, None, "violet", tmp_path / "e1.ass", effect="fade",
+                         out_w=1080, out_h=1920).read_text(encoding="utf-8")
+    assert "\\fad(150,150)" in fade
+    slide = sub.build_ass(words, 30, None, "violet", tmp_path / "e2.ass", effect="slide",
+                          out_w=1080, out_h=1920).read_text(encoding="utf-8")
+    assert "\\move(" in slide
+    glow = sub.build_ass(words, 30, None, "violet", tmp_path / "e3.ass", effect="glow",
+                         out_w=1080, out_h=1920).read_text(encoding="utf-8")
+    assert "\\blur2" in glow
+    pop = sub.build_ass(words, 30, None, "violet", tmp_path / "e4.ass", effect="pop",
+                        out_w=1080, out_h=1920).read_text(encoding="utf-8")
+    assert "\\t(" in pop
+
+
+def test_font_names_are_sanitized():
+    from harness import server
+    assert server._clean_family("Inter") == "Inter"
+    assert server._clean_family("DejaVu Sans") == "DejaVu Sans"
+    assert server._clean_family("Bad,Name") == "" and server._clean_family("x}{y") == ""
+    assert server._pct("150") == 100.0 and server._pct("-3") == 0.0 and server._pct(None) is None
+    assert server._pct("abc") is None
+
+
+def test_bundled_fonts_listed():
+    from harness import fonts
+    fams = [f["family"] for f in fonts.list_fonts()]
+    assert "DejaVu Sans" in fams and "Inter" in fams
+    assert fonts.resolve("DejaVu Sans") is not None
+    assert fonts.resolve("No Such Font") is None
+    assert fonts.resolve("a,b") is None

@@ -16,6 +16,15 @@ ASPECTS = {"9:16": (1080, 1920), "16:9": (1920, 1080), "4:3": (1440, 1080), "1:1
 DEFAULT_ASPECT = "9:16"
 
 
+def render_workers() -> int:
+    """Сколько клипов рендерить параллельно (HARNESS_RENDER_WORKERS или по числу ядер)."""
+    import os
+    env = os.environ.get("HARNESS_RENDER_WORKERS", "").strip()
+    if env.isdigit() and int(env) > 0:
+        return int(env)
+    return max(1, min(3, (os.cpu_count() or 2)))
+
+
 def out_size(aspect: str | None) -> tuple[int, int]:
     return ASPECTS.get(aspect or DEFAULT_ASPECT, ASPECTS[DEFAULT_ASPECT])
 OUT_FPS = 30
@@ -76,3 +85,8 @@ SETTINGS_FILE = DATA_DIR / "settings.json"
 
 for _p in (DATA_DIR, PROJECTS_DIR, WHISPER_DIR):
     _p.mkdir(parents=True, exist_ok=True)
+
+FONTS_DIR = BASE_DIR / "fonts"            # встроенные шрифты субтитров (OFL), см. fonts/LICENSES.txt
+USER_FONTS_DIR = DATA_DIR / "fonts"       # шрифты, загруженные пользователем
+SUB_EFFECTS = {"none": "Без эффекта", "fade": "Плавное появление", "slide": "Выезд снизу",
+               "glow": "Свечение", "pop": "Всплеск слов"}

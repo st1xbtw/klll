@@ -9,7 +9,7 @@ from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 block_cipher = None
 
-datas = [("ui", "ui"), ("models", "models")]
+datas = [("ui", "ui"), ("models", "models"), ("fonts", "fonts")]
 binaries = []
 hiddenimports = []
 

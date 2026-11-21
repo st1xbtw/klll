@@ -169,3 +169,57 @@ def test_render_other_aspects(tmp_path, aspect):
     assert res["ok"], res
     assert (res["width"], res["height"]) == (w, h)
     assert res["duration"] == pytest.approx(30, abs=0.5)
+
+
+def test_font_upload_rejects_non_font(client, tmp_path):
+    bad = tmp_path / "bad.ttf"
+    bad.write_bytes(b"not a font at all")
+    with open(bad, "rb") as fh:
+        r = client.post("/api/fonts", files={"file": ("bad.ttf", fh, "font/ttf")})
+    assert r.status_code == 400
+    with open(bad, "rb") as fh:
+        r = client.post("/api/fonts", files={"file": ("bad.txt", fh, "text/plain")})
+    assert r.status_code == 400
+
+
+def test_font_list_endpoint(client):
+    r = client.get("/api/fonts")
+    assert r.status_code == 200
+    body = r.json()
+    assert any(f["family"] == "Inter" for f in body["fonts"])
+    assert set(body["effects"]) >= {"none", "fade", "slide", "glow", "pop"}
+
+
+def test_subtitle_position_and_font_via_restyle(client, project):
+    pid = project["id"]
+    r = client.post(f"/api/projects/{pid}/restyle",
+                    json={"sub_x": 40, "sub_y": 60.5, "sub_font": "Inter", "sub_effect": "glow"})
+    assert r.status_code == 200
+    p = storage.load_project(pid)
+    assert p["options"]["sub_x"] == 40 and p["options"]["sub_y"] == 60.5
+    assert p["options"]["sub_font"] == "Inter" and p["options"]["sub_effect"] == "glow"
+    assert all(c["sub_x"] == 40 and c["sub_font"] == "Inter" for c in p["clips"])
+    r = client.post(f"/api/projects/{pid}/restyle", json={"sub_x": None, "sub_y": None})
+    assert r.status_code == 200
+    assert storage.load_project(pid)["options"]["sub_x"] is None
+
+
+@pytest.mark.parametrize("effect", ["fade", "slide", "glow"])
+def test_render_with_font_position_and_effect(tmp_path, effect):
+    """Сгенерированный ASS с встроенным шрифтом, позицией и эффектом проходит реальный рендер."""
+    from harness import fonts, subtitles as sub
+    src = ROOT / "tests" / "assets" / "test_talk.mp4"
+    if not src.exists():
+        pytest.skip("нет тестового видео: запустите tests/make_assets.py")
+    clip_dir = tmp_path / "clip"
+    clip_dir.mkdir()
+    family = fonts.copy_for_clip("DejaVu Sans", clip_dir)
+    assert family == "DejaVu Sans" and (clip_dir / "fonts" / "DejaVuSans.ttf").exists()
+    words = [{"w": "секрет", "s": 1.0, "e": 1.6}, {"w": "денег", "s": 1.7, "e": 2.3}]
+    ass = sub.build_ass(words, 30, "Хук дня", "violet", clip_dir / "sub.ass", font=family,
+                        pos=(540.0, 1100.0), effect=effect, out_w=1080, out_h=1920)
+    res = render.render_clip(src, 20.0, 30.0, None, ass, clip_dir / "clip.mp4", "tiktok",
+                             threading.Event(), framing="fit", src_w=1920, src_h=1080,
+                             out_w=1080, out_h=1920)
+    assert res["ok"], res
+    assert res["duration"] == pytest.approx(30, abs=0.5)

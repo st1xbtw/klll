@@ -6,6 +6,7 @@
 (чтобы кадр не дёргался) + линейная интерполяция между ключевыми кадрами.
 """
 from __future__ import annotations
+import threading
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,20 +18,20 @@ from . import config
 
 SAMPLE_STEP = 0.5          # секунд между детекциями
 KEY_STEP = 1.0             # шаг ключевых кадров для ffmpeg-выражения
-_cascade = None
+_local = threading.local()  # каскад не потокобезопасен: по одному экземпляру на поток
 
 
 def _get_cascade():
-    global _cascade
-    if _cascade is None:
+    c = getattr(_local, "cascade", None)
+    if c is None:
         path = config.MODELS_DIR / "haarcascade_frontalface_default.xml"
         if not path.exists():
             raise FileNotFoundError(f"Нет файла каскада: {path}")
         c = cv2.CascadeClassifier(str(path))
         if c.empty():
             raise RuntimeError("Не удалось загрузить каскад Haar")
-        _cascade = c
-    return _cascade
+        _local.cascade = c
+    return c
 
 
 @dataclass

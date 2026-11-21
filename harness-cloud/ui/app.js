@@ -34,6 +34,7 @@
     moon: '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>',
     check: '<path d="M5 12l5 5 9-10"/>',
     star: '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>',
+    trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8 20h8M9 17h6"/>',
   };
   function iconSvg(name) {
     const inner = ICONS[name];
@@ -116,6 +117,7 @@
   function applyTheme(theme, persist) {
     document.documentElement.dataset.theme = theme;
     $("themeDark").checked = theme === "dark";
+    $("themeSwitch").checked = theme === "dark";
     $("themeLight").checked = theme === "light";
     $("setTheme").value = theme;
     localStorage.setItem("hc_theme", theme);
@@ -124,6 +126,7 @@
       api("/api/settings", { method: "PUT", body: { theme } }).catch(() => {});
     }
   }
+  $("themeSwitch").addEventListener("change", () => applyTheme($("themeSwitch").checked ? "dark" : "light", true));
   $("themeDark").addEventListener("change", () => applyTheme("dark", true));
   $("themeLight").addEventListener("change", () => applyTheme("light", true));
 
@@ -212,6 +215,9 @@
     fd.append("sub_emoji", $("subEmoji").checked ? "1" : "0");
     fd.append("sub_anim", $("subAnim").checked ? "1" : "0");
     fd.append("aspect", $("aspect").value);
+    fd.append("watermark", $("watermark").value.trim());
+    fd.append("sub_font", $("subFont").value);
+    fd.append("sub_effect", $("subEffect").value || "none");
     fd.append("subtitles", $("subsOn").checked ? "1" : "0");
     toast(`Загрузка файла «${file.name}»…`);
     try {
@@ -238,6 +244,8 @@
         framing: $("framing").value,
         sub_box: $("subBox").checked, sub_emoji: $("subEmoji").checked, sub_anim: $("subAnim").checked,
         aspect: $("aspect").value, subtitles: $("subsOn").checked,
+        watermark: $("watermark").value.trim(),
+        sub_font: $("subFont").value, sub_effect: $("subEffect").value || "none",
       }});
       afterCreate(r.ids);
     } catch (e) { toast(e.message, "err"); }
@@ -299,6 +307,35 @@
   const STEP_NAMES = { source: "загрузка видео", audio: "извлечение аудио", transcribe: "транскрибация",
     analyze: "поиск моментов", clips: "рендер клипов" };
 
+  // ---------- карточка обработки: шаги, процент, отмена ----------
+  const PROC_STEPS = [
+    ["source", "Загрузка видео"], ["audio", "Извлечение аудио"], ["transcribe", "Транскрибация"],
+    ["analyze", "Поиск сильных моментов"], ["clips", "Монтаж и рендер"],
+  ];
+  function renderProcessing(p, live) {
+    const card = $("procCard");
+    card.classList.toggle("live", !!live);
+    const done = new Set(p.steps_done || []);
+    const finished = p.status === "done";
+    let activeSet = false;
+    $("procSteps").innerHTML = PROC_STEPS.map(([key, label]) => {
+      let cls = "";
+      if (finished || done.has(key)) cls = "done";
+      else if (live && !activeSet) { cls = "active"; activeSet = true; }
+      return `<li class="${cls}"><span class="mark"></span>${label}</li>`;
+    }).join("") + `<li class="${finished ? "done" : ""}"><span class="mark"></span>Готово!</li>`;
+    $("procPct").textContent = finished ? "100%" : live ? Math.round((p.progress || 0) * 100) + "%" : "—";
+    const found = (p.clips || []).length;
+    $("procFound").textContent = found ? `Найдено ${found} сильных моментов` : (live ? "Ищем сильные моменты…" : "Ждём видео");
+    $("cancelBtn").disabled = !live;
+  }
+  $("cancelBtn").addEventListener("click", async () => {
+    if (!state.pid) return;
+    await api(`/api/projects/${state.pid}/cancel`, { method: "POST" }).catch(() => {});
+    toast("Отмена запрошена");
+    startPolling();
+  });
+
   // ---------- рендер проекта ----------
   function renderProject(p) {
     const phoneEmpty = $("phoneEmpty");
@@ -310,6 +347,7 @@
       $("zipBtn").disabled = true;
       $("clipList").innerHTML = '<div class="empty">Запустите обработку, и здесь появятся клипы</div>';
       $("clipPos").textContent = "—";
+      renderProcessing({ status: "idle", steps_done: [], clips: [], progress: 0 }, false);
       return;
     }
     const clips = p.clips || [];
@@ -327,6 +365,7 @@
     const live = p.status === "running" || p.status === "queued";
     $("progressWrap").hidden = !live;
     $("progressBar").style.width = Math.round((p.progress || 0) * 100) + "%";
+    renderProcessing(p, live);
     $("zipBtn").disabled = ready === 0;
 
     const warns = [...(p.warnings || [])];
@@ -370,16 +409,25 @@
       let overlay = "";
       if (c.status === "processing") overlay = '<div class="clip-state"><div class="spinner"></div>Рендер…</div>';
       else if (c.status === "queued" && !done) overlay = '<div class="clip-state">В очереди</div>';
+      const score = c.score == null ? 0 : Math.round(c.score * 10) / 10;
+      const scoreTxt = c.score == null ? "—" : score.toFixed(1);
+      const dl = done
+        ? `<a class="icon-btn" href="/api/projects/${encodeURIComponent(p.id)}/clips/${c.index}/download" download title="Скачать клип" data-icon="download"></a>`
+        : "";
       return `
         <div class="clip-card ${c.index === state.selected ? "active" : ""} ${c.status === "processing" ? "processing" : ""} ${c.status === "queued" ? "queued" : ""}" data-idx="${c.index}" tabindex="0" role="button" aria-label="Клип ${c.index}">
-          <div class="clip-thumb">${thumb}
-            <span class="rank">${c.index}</span>
-            <span class="score"><span data-icon="star"></span>${c.score == null ? "—" : c.score + "%"}</span>
-            <span class="dur">0:30</span>
-            ${overlay}
+          <span class="rank">${c.index}</span>
+          <div class="clip-thumb">${thumb}<span class="dur">0:30</span>${overlay}</div>
+          <div class="clip-info">
+            <div class="meter"><span class="meter-lbl">Сила момента</span><span class="meter-bar"><i style="width:${score}%"></i></span><span class="score">${scoreTxt}</span></div>
+            <div class="clip-title">${esc(clipTitle(c))}</div>
+            ${c.hook ? `<div class="clip-hook">Хук: «${esc(c.hook)}»</div>` : ""}
+            ${c.status === "error" ? `<div class="clip-err">${esc((c.error || "").slice(0, 120))}</div>` : ""}
           </div>
-          <div class="clip-title">${esc(clipTitle(c))}</div>
-          ${c.status === "error" ? `<div class="clip-err">${esc((c.error || "").slice(0, 120))}</div>` : ""}
+          <div class="clip-actions">
+            <button class="icon-btn" data-act="play" data-icon="play" title="Открыть в предпросмотре"></button>
+            ${dl}
+          </div>
         </div>`;
     }).join("");
     paintIcons(list);
@@ -412,6 +460,7 @@
     }
     const [aw, ah] = (clip.aspect || "9:16").split(":");
     document.querySelector(".phone").style.aspectRatio = `${aw} / ${ah}`;
+    updateSubHandle(clip);
     refreshSidePanel(clip);
     drawTimeline();
     if (userAction) player.play().catch(() => {});
@@ -705,18 +754,107 @@
     restyle({ framing: $("framing").value }, "Перерендер клипов с новым кадрированием"));
   $("aspect").addEventListener("change", () =>
     restyle({ aspect: $("aspect").value }, "Перерендер клипов в новом формате кадра"));
+  $("watermark").addEventListener("change", () =>
+    restyle({ watermark: $("watermark").value.trim() }, "Перерендер клипов с новым водяным знаком"));
   $("subsOn").addEventListener("change", () =>
     restyle({ subtitles: $("subsOn").checked }, "Перерендер клипов: субтитры и хук"));
   [["subBox", "sub_box"], ["subEmoji", "sub_emoji"], ["subAnim", "sub_anim"]].forEach(([id, key]) =>
     $(id).addEventListener("change", () =>
       restyle({ [key]: $(id).checked }, "Перерендер клипов с новыми субтитрами")));
 
+  // ---------- шрифты, эффекты и положение субтитров ----------
+  function fillFonts(list, effects) {
+    const cur = $("subFont").value;
+    $("subFont").innerHTML = '<option value="">По умолчанию (шрифт стиля)</option>' +
+      list.map((f) => `<option value="${esc(f.family)}">${esc(f.family)}${f.builtin ? "" : " (свой)"}</option>`).join("");
+    $("subFont").value = [...$("subFont").options].some((o) => o.value === cur) ? cur : "";
+    if (effects) {
+      const ecur = $("subEffect").value;
+      $("subEffect").innerHTML = Object.entries(effects).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("");
+      $("subEffect").value = ecur || "none";
+    }
+  }
+  async function loadFonts() {
+    const r = await api("/api/fonts");
+    fillFonts(r.fonts || [], r.effects || {});
+  }
+  $("fontBtn").addEventListener("click", () => $("fontFile").click());
+  $("fontFile").addEventListener("change", async () => {
+    const file = $("fontFile").files[0];
+    $("fontFile").value = "";
+    if (!file) return;
+    const fd = new FormData();
+    fd.append("file", file);
+    try {
+      const res = await fetch("/api/fonts", { method: "POST", body: fd });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Не удалось загрузить шрифт");
+      fillFonts(data.fonts || [], null);
+      $("subFont").value = data.font.family;
+      toast(`Шрифт «${data.font.family}» добавлен`, "ok");
+      restyle({ sub_font: data.font.family }, "Перерендер клипов с новым шрифтом");
+    } catch (e) { toast(e.message, "err"); }
+  });
+  $("subFont").addEventListener("change", () =>
+    restyle({ sub_font: $("subFont").value }, "Перерендер клипов с новым шрифтом"));
+  $("subEffect").addEventListener("change", () =>
+    restyle({ sub_effect: $("subEffect").value }, "Перерендер клипов с новым эффектом"));
+
+  // Метка «Субтитры» в превью: показывает положение нижнего центра строки. Перетаскивание → перерендер.
+  const SUB_DEFAULT = { x: 50, y: 77.6 };
+  function updateSubHandle(clip) {
+    const h = $("subHandle");
+    if (!h) return;
+    h.hidden = !clip || clip.subtitles === false;
+    const x = clip && clip.sub_x != null ? clip.sub_x : SUB_DEFAULT.x;
+    const y = clip && clip.sub_y != null ? clip.sub_y : SUB_DEFAULT.y;
+    h.style.left = x + "%";
+    h.style.top = y + "%";
+  }
+  (function initSubDrag() {
+    const h = $("subHandle");
+    const phone = document.querySelector(".phone");
+    let dragging = false;
+    let last = null;
+    const clampPct = (v) => Math.min(100, Math.max(0, v));
+    h.addEventListener("pointerdown", (e) => {
+      dragging = true;
+      last = null;
+      h.setPointerCapture(e.pointerId);
+      h.classList.add("drag");
+      e.preventDefault();
+    });
+    h.addEventListener("pointermove", (e) => {
+      if (!dragging) return;
+      const r = phone.getBoundingClientRect();
+      const x = clampPct((e.clientX - r.left) / r.width * 100);
+      const y = clampPct((e.clientY - r.top) / r.height * 100);
+      last = { x: Math.round(x * 100) / 100, y: Math.round(y * 100) / 100 };
+      h.style.left = last.x + "%";
+      h.style.top = last.y + "%";
+    });
+    h.addEventListener("pointerup", () => {
+      if (!dragging) return;
+      dragging = false;
+      h.classList.remove("drag");
+      if (!last) return;
+      const pos = last;
+      last = null;
+      restyle({ sub_x: pos.x, sub_y: pos.y }, "Перерендер клипов: новое положение субтитров");
+    });
+    $("subReset").addEventListener("click", () =>
+      restyle({ sub_x: null, sub_y: null }, "Субтитры возвращены вниз, перерендер"));
+  })();
+
   function syncControls(p) {
     const o = (p && p.options) || {};
     if (o.subtitle_style) $("subStyle").value = o.subtitle_style;
     $("framing").value = o.framing || "face";
     $("aspect").value = o.aspect || "9:16";
+    $("watermark").value = o.watermark || "";
     $("subsOn").checked = o.subtitles !== false;
+    $("subEffect").value = o.sub_effect || "none";
+    if (o.sub_font !== undefined) $("subFont").value = o.sub_font || "";
     $("subBox").checked = !!o.sub_box;
     $("subEmoji").checked = !!o.sub_emoji;
     $("subAnim").checked = !!o.sub_anim;
@@ -808,6 +946,7 @@
   async function boot() {
     paintIcons(document);
     applyTheme(localStorage.getItem("hc_theme") || "dark", false);
+    loadFonts().catch(() => {});
     try {
       state.meta = await api("/api/meta");
       state.settings = await api("/api/settings");
