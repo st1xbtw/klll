@@ -15,7 +15,6 @@ DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 SetupIconFile=..\ui\assets\icon.ico
-UninstallDisplayIcon={app}\{#MyAppExe}
 OutputDir=..\installer_out
 OutputBaseFilename=HarnessCloud-Setup
 Compression=lzma2
