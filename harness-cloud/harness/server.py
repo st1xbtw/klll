@@ -16,7 +16,8 @@ from . import config, fonts, ingest, pipeline, storage, tools, segments as sg
 from .jobs import JobManager
 
 DEFAULT_SETTINGS = {"theme": "dark", "clip_count": 8, "clip_length": 30, "subtitle_style": "violet",
-                    "whisper_model": "base", "export_preset": "tiktok", "notify": True, "save_dir": ""}
+                    "whisper_model": "base", "export_preset": "tiktok", "notify": True, "save_dir": "",
+                    "quality": "1080p", "fps": 30, "save_min_score": 0}
 # Нативный выбор папки. Задаёт run.py при запуске окна pywebview; None — выбор недоступен (браузер).
 FOLDER_PICKER = None
 RANGE_RE = re.compile(r"bytes=(\d*)-(\d*)")
@@ -81,8 +82,8 @@ def _options(payload: dict) -> dict:
         "export_preset": payload.get("export_preset") or s["export_preset"],
         "framing": payload.get("framing") if payload.get("framing") in FRAMINGS else "face",
         "aspect": payload.get("aspect") if payload.get("aspect") in config.ASPECTS else config.DEFAULT_ASPECT,
-        "quality": payload.get("quality") if payload.get("quality") in config.QUALITIES else config.DEFAULT_QUALITY,
-        "fps": config.parse_fps(payload.get("fps")) or config.DEFAULT_FPS,
+        "quality": payload.get("quality") if payload.get("quality") in config.QUALITIES else s["quality"],
+        "fps": config.parse_fps(payload.get("fps")) or config.parse_fps(s["fps"]) or config.DEFAULT_FPS,
         "subtitles": _flag(payload["subtitles"]) if "subtitles" in payload else True,
         "watermark": str(payload.get("watermark") or "").strip()[:40],
         "sub_font": _clean_family(payload.get("sub_font")),
@@ -172,6 +173,13 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
         s = {**_read_settings(), **{k: v for k, v in body.items() if k in DEFAULT_SETTINGS}}
         if "save_dir" in s:
             s["save_dir"] = _checked_dir(s["save_dir"])
+        if s.get("quality") not in config.QUALITIES:
+            s["quality"] = DEFAULT_SETTINGS["quality"]
+        s["fps"] = config.parse_fps(s.get("fps")) or DEFAULT_SETTINGS["fps"]
+        try:
+            s["save_min_score"] = max(0, min(100, int(float(s.get("save_min_score") or 0))))
+        except (TypeError, ValueError):
+            s["save_min_score"] = 0
         config.SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
         config.SETTINGS_FILE.write_text(json.dumps(s, ensure_ascii=False, indent=2), encoding="utf-8")
         return s
@@ -479,6 +487,38 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
             raise HTTPException(404, "Клип ещё не готов")
         return FileResponse(storage.project_dir(pid) / clip["file"], media_type="video/mp4",
                             filename=f"clip_{idx:02d}.mp4")
+
+    @app.get("/api/estimate")
+    def estimate(count: int = 5, quality: str = "1080p", fps: int = 30, aspect: str = "9:16"):
+        """Оценка времени рендера клипов по выбранным качеству, частоте кадров и формату."""
+        q = quality if quality in config.QUALITIES else config.DEFAULT_QUALITY
+        f = config.parse_fps(fps) or config.DEFAULT_FPS
+        a = aspect if aspect in config.ASPECTS else config.DEFAULT_ASPECT
+        cnt = max(config.MIN_CLIPS, min(config.MAX_CLIPS, int(count)))
+        sec = config.estimate_seconds(cnt, q, f, a, config.CLIP_LEN, config.render_workers(),
+                                      pipeline.render_speed())
+        w, h = config.out_size(a, q)
+        return {"seconds": round(sec), "clips": cnt, "width": w, "height": h, "fps": f,
+                "calibrated": config.CALIBRATION_FILE.exists()}
+
+    @app.post("/api/projects/{pid}/clips/{idx}/schedule")
+    async def schedule_clip(pid: str, idx: int, request: Request):
+        """Дата и время публикации клипа. Приложение не публикует сам: это план для ручной публикации."""
+        from datetime import datetime
+        body = await request.json()
+        value = str(body.get("publish_at") or "").strip()
+        if value:
+            try:
+                datetime.fromisoformat(value)
+            except ValueError:
+                raise HTTPException(400, "Некорректная дата публикации")
+        proj = storage.load_project(pid)
+        clip = next((c for c in proj["clips"] if c["index"] == idx), None)
+        if clip is None:
+            raise HTTPException(404, "Клип не найден")
+        clip["publish_at"] = value
+        storage.save_project(proj)
+        return {"ok": True, "publish_at": value}
 
     @app.post("/api/projects/{pid}/save")
     def save_project_files(pid: str):

@@ -22,7 +22,7 @@ def _auto_save(pid: str) -> None:
     if proj.get("status") != "done":
         return
     try:
-        pipeline.save_to_folder(proj, Path(root))
+        pipeline.save_to_folder(proj, Path(root), pipeline.save_min_score_setting())
     except Exception as exc:  # сохранение не должно ломать готовый проект
         proj = storage.load_project(pid)
         proj.setdefault("warnings", []).append(f"Не удалось сохранить в папку: {exc}")

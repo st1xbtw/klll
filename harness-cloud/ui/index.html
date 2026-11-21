@@ -28,7 +28,7 @@
         <div><kbd>Ctrl</kbd> + <kbd>S</kbd> — сохранить</div>
         <div><kbd>←</kbd> <kbd>→</kbd> — клип назад / вперёд</div>
       </div>
-      <div class="side-foot">Harness Cloud 1.0.0</div>
+      <div class="side-foot" id="sideVersion">Harness Cloud</div>
     </aside>
 
     <main class="main">
@@ -163,6 +163,7 @@
               </div>
             </div>
             <button class="btn btn-primary btn-xl" id="startBtn"><span data-icon="wand"></span>Начать обработку<span data-icon="chev-r"></span></button>
+            <div class="hint estimate" id="estimate"></div>
           </section>
 
           <!-- Предпросмотр -->
@@ -281,6 +282,12 @@
                   <div class="tags" id="tags"></div>
                   <button class="btn btn-ghost btn-sm" id="copyDesc"><span data-icon="copy"></span>Копировать</button>
                 </div>
+                <label class="field schedule-field">Запланировать публикацию
+                  <div class="save-dir-row">
+                    <input id="publishAt" type="datetime-local" class="input input-sm">
+                    <button class="btn btn-ghost btn-sm" id="publishSave" type="button">Сохранить</button>
+                  </div>
+                </label>
                 <button class="btn btn-accent btn-sm" id="dlOne" disabled><span data-icon="download"></span>Скачать этот клип</button>
               </div>
             </div>
@@ -314,6 +321,19 @@
           </label>
           <label class="field">Пресет экспорта
             <select id="setPreset" class="select"></select>
+          </label>
+          <label class="field">Качество по умолчанию
+            <select id="setQuality" class="select">
+              <option value="480p">480p</option><option value="720p">720p</option><option value="1080p">1080p — Full HD</option>
+              <option value="2k">2K — 1440p</option><option value="4k">4K — 2160p</option>
+            </select>
+          </label>
+          <label class="field">Частота кадров по умолчанию
+            <select id="setFps" class="select"><option value="20">20 FPS</option><option value="24">24 FPS</option><option value="25">25 FPS</option><option value="30">30 FPS</option><option value="48">48 FPS</option><option value="50">50 FPS</option><option value="60">60 FPS</option><option value="90">90 FPS</option><option value="120">120 FPS</option></select>
+          </label>
+          <label class="field">Автосохранение только для клипов с силой от (0–100)
+            <input id="setMinScore" class="input input-sm" type="number" min="0" max="100" step="1" value="0">
+            <small class="hint">0 — сохранять все клипы. Клипы, добавленные вручную, сохраняются всегда.</small>
           </label>
           <div class="field save-dir-field">
             <span>Папка сохранения</span>

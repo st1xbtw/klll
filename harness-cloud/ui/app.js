@@ -447,6 +447,7 @@
     const clip = currentClips().find((c) => c.index === idx);
     if (!clip) return;
     state.selected = idx;
+    $("publishAt").value = clip.publish_at ? clip.publish_at.slice(0, 16) : "";
     const pos = currentClips().findIndex((c) => c.index === idx) + 1;
     $("clipPos").textContent = `${pos} / ${currentClips().length}`;
     document.querySelectorAll(".clip-card").forEach((el) => el.classList.toggle("active", Number(el.dataset.idx) === idx));
@@ -744,8 +745,11 @@
 
   // ---------- стиль и пресет без повторной транскрибации ----------
   async function restyle(body, okMsg) {
-    const p = state.project;
-    if (!p || !state.pid || !(p.clips || []).length) return;
+    if (!state.pid) return;
+    // Занятость проверяем по свежему статусу сервера: локальный снимок мог отстать от перерендера.
+    let p;
+    try { p = await api(`/api/projects/${state.pid}`); } catch (e) { toast(e.message, "err"); return; }
+    if (!(p.clips || []).length) return;
     if (busy(p)) {
       toast("Дождитесь окончания обработки, потом меняйте оформление", "err");
       syncControls(p);
@@ -918,6 +922,9 @@
     $("setPreset").value = s.export_preset;
     $("setNotify").checked = !!s.notify;
     $("setSaveDir").value = s.save_dir || "";
+    $("setQuality").value = s.quality || "1080p";
+    $("setFps").value = String(s.fps || 30);
+    $("setMinScore").value = String(s.save_min_score || 0);
   }
   async function saveSettings() {
     const body = {
@@ -928,6 +935,9 @@
       export_preset: $("setPreset").value,
       notify: $("setNotify").checked,
       save_dir: $("setSaveDir").value.trim(),
+      quality: $("setQuality").value,
+      fps: Number($("setFps").value),
+      save_min_score: Number($("setMinScore").value) || 0,
     };
     try {
       state.settings = await api("/api/settings", { method: "PUT", body });
@@ -937,6 +947,16 @@
     } catch (e) { toast(e.message, "err"); }
   }
   $("saveSettings").addEventListener("click", saveSettings);
+  $("publishSave").addEventListener("click", async () => {
+    if (!state.pid || state.selected == null) return toast("Выберите клип", "err");
+    try {
+      await api(`/api/projects/${state.pid}/clips/${state.selected}/schedule`, {
+        method: "POST", body: { publish_at: $("publishAt").value },
+      });
+      toast($("publishAt").value ? "Дата публикации сохранена" : "Дата публикации убрана", "ok");
+      startPolling();
+    } catch (e) { toast(e.message, "err"); }
+  });
   $("pickSaveDir").addEventListener("click", async () => {
     try {
       const r = await api("/api/pick-folder", { method: "POST" });
@@ -951,7 +971,28 @@
     $("subStyle").value = s.subtitle_style;
     $("whisperModel").value = s.whisper_model;
     $("exportPreset").value = s.export_preset;
+    $("quality").value = s.quality || "1080p";
+    $("fps").value = String(s.fps || 30);
+    updateEstimate();
   }
+  // ---------- оценка времени рендера ----------
+  async function updateEstimate() {
+    const el = $("estimate");
+    if (!el) return;
+    const qs = new URLSearchParams({
+      count: $("clipCount").value, quality: $("quality").value,
+      fps: $("fps").value, aspect: $("aspect").value,
+    });
+    try {
+      const e = await api(`/api/estimate?${qs}`);
+      const m = Math.floor(e.seconds / 60), s = e.seconds % 60;
+      const t = m ? `${m} мин ${String(s).padStart(2, "0")} с` : `${s} с`;
+      const warn = Number($("fps").value) > 60 || $("quality").value === "4k" ? " Рендер в этих настройках займёт заметно дольше." : "";
+      el.textContent = `Примерно ${t} на рендер ${e.clips} клипов · ${e.width}×${e.height}, ${e.fps} fps.` +
+        (e.calibrated ? "" : " Оценка по умолчанию, уточнится после первого рендера.") + warn;
+    } catch (_) { el.textContent = ""; }
+  }
+  ["clipCount", "quality", "fps", "aspect"].forEach((id) => $(id).addEventListener("change", updateEstimate));
 
   // ---------- горячие клавиши ----------
   document.addEventListener("keydown", (e) => {
@@ -989,6 +1030,7 @@
     applyTheme(state.settings.theme || "dark", false);
     setContentType(state.contentType);
     $("aboutSub").textContent = `${state.meta.name} ${state.meta.version}`;
+    $("sideVersion").textContent = `${state.meta.name} ${state.meta.version}`;
     $("aboutMeta").textContent = `Выход: ${state.meta.output.w}×${state.meta.output.h}, ${state.meta.output.fps} fps, H.264 + AAC. ` +
       `FFmpeg: ${state.meta.ffmpeg}`;
     refreshUrlHint();

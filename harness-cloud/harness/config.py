@@ -42,6 +42,20 @@ def _even(x: float) -> int:
     return int(round(x / 2) * 2)  # кодек H.264 требует чётные размеры
 
 
+# Скорость рендера по умолчанию: пикселей×кадров в секунду видео, которые кодируются за секунду
+# (замер: клип 1080×1920, 30 fps, 30 с — около 20 с на двух ядрах). Уточняется по фактическим рендерам.
+RENDER_SPEED_DEFAULT = 9.0e7
+
+
+def estimate_seconds(count: int, quality: str | None, fps: int, aspect: str | None,
+                     clip_len: float, workers: int, speed: float) -> float:
+    """Оценка времени рендера клипов: батчами по числу параллельных рабочих."""
+    w, h = out_size(aspect, quality)
+    per_clip = (w * h * fps * clip_len) / max(speed, 1.0)
+    batches = -(-count // max(workers, 1))  # округление вверх
+    return batches * per_clip
+
+
 def parse_fps(value) -> int | None:
     """Частота кадров из запроса: целое от FPS_MIN до FPS_MAX, иначе None."""
     try:
@@ -115,6 +129,7 @@ DATA_DIR = _data_dir()
 PROJECTS_DIR = DATA_DIR / "projects"
 WHISPER_DIR = DATA_DIR / "whisper"
 SETTINGS_FILE = DATA_DIR / "settings.json"
+CALIBRATION_FILE = DATA_DIR / "calibration.json"  # скорость рендера, измеренная на этой машине
 
 for _p in (DATA_DIR, PROJECTS_DIR, WHISPER_DIR):
     _p.mkdir(parents=True, exist_ok=True)

@@ -102,3 +102,54 @@ def test_render_matches_chosen_quality_and_fps(tmp_path, aspect, quality, fps):
     assert res["ok"], res
     assert (res["width"], res["height"]) == (w, h)
     assert res["fps"] == pytest.approx(fps, abs=0.5)
+
+
+def test_estimate_grows_with_quality_fps_and_batches():
+    base = config.estimate_seconds(5, "1080p", 30, "9:16", 30.0, 2, 9.0e7)
+    assert config.estimate_seconds(5, "4k", 60, "9:16", 30.0, 2, 9.0e7) == pytest.approx(base * 8)  # 4× пикселей, 2× кадров
+    assert config.estimate_seconds(5, "1080p", 30, "9:16", 30.0, 1, 9.0e7) > base  # один рабочий — дольше
+    # 5 клипов при 2 рабочих — 3 батча
+    one = config.estimate_seconds(1, "1080p", 30, "9:16", 30.0, 2, 9.0e7)
+    assert base == pytest.approx(3 * one)
+
+
+def test_render_speed_is_calibrated_by_measurements(tmp_path, monkeypatch):
+    from harness import pipeline
+    monkeypatch.setattr(config, "CALIBRATION_FILE", tmp_path / "calibration.json")
+    assert pipeline.render_speed() == config.RENDER_SPEED_DEFAULT
+    pipeline.note_render_speed(1.0e9, 5.0)      # 2e8 единиц/с — быстрее значения по умолчанию
+    assert config.RENDER_SPEED_DEFAULT < pipeline.render_speed() < 2.0e8
+    before = pipeline.render_speed()
+    pipeline.note_render_speed(1.0e9, 0.1)      # слишком короткий отрезок не учитывается
+    assert pipeline.render_speed() == before
+
+
+def test_schedule_and_settings_validation(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "SETTINGS_FILE", tmp_path / "settings.json")
+    client = TestClient(server.create_app(jobs=_Jobs()))
+    r = client.put("/api/settings", json={"quality": "8k", "fps": 500, "save_min_score": 150})
+    s = r.json()
+    assert s["quality"] == "1080p" and s["fps"] == 30 and s["save_min_score"] == 100
+    r = client.put("/api/settings", json={"quality": "720p", "fps": 60, "save_min_score": 40})
+    assert r.json()["quality"] == "720p" and r.json()["fps"] == 60 and r.json()["save_min_score"] == 40
+
+    est = client.get("/api/estimate", params={"count": 5, "quality": "4k", "fps": 60, "aspect": "9:16"}).json()
+    assert est["width"] == 2160 and est["height"] == 3840 and est["fps"] == 60 and est["seconds"] > 0
+
+
+def test_schedule_endpoint_stores_date(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "SETTINGS_FILE", tmp_path / "settings.json")
+    p = storage.create_project("/nonexistent/src.mp4", "file", "podcast", {"clip_count": 5})
+    p["status"] = "done"
+    p["clips"] = [{"index": 1, "status": "done", "file": None, "score": 70}]
+    storage.save_project(p)
+    try:
+        client = TestClient(server.create_app(jobs=_Jobs()))
+        assert client.post(f"/api/projects/{p['id']}/clips/1/schedule",
+                           json={"publish_at": "не дата"}).status_code == 400
+        r = client.post(f"/api/projects/{p['id']}/clips/1/schedule", json={"publish_at": "2026-12-01T18:30"})
+        assert r.status_code == 200
+        assert storage.load_project(p["id"])["clips"][0]["publish_at"] == "2026-12-01T18:30"
+        assert client.post(f"/api/projects/{p['id']}/clips/9/schedule", json={"publish_at": ""}).status_code == 404
+    finally:
+        storage.delete_project(p["id"])

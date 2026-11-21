@@ -106,3 +106,18 @@ def test_pick_folder_returns_chosen_path(client):
         assert r.status_code == 200 and r.json()["path"] == "D:/Клипы"
     finally:
         server.FOLDER_PICKER = None
+
+
+def test_auto_save_skips_clips_below_min_score(project, settings_file, tmp_path):
+    from harness import pipeline
+    from harness import storage as st
+    proj = st.load_project(project["id"])
+    proj["clips"][0]["score"] = 80
+    proj["clips"][1]["score"] = 20
+    st.save_project(proj)
+    dest = pipeline.save_to_folder(proj, tmp_path / "filtered", min_score=50)
+    assert (dest / "clip_01.mp4").exists() and not (dest / "clip_02.mp4").exists()
+    import zipfile
+    names = zipfile.ZipFile(dest / f"{proj['id']}_clips.zip").namelist()
+    assert "clip_01.mp4" in names and "clip_02.mp4" not in names
+    assert pipeline.save_min_score_setting() == 0   # без настроек порог 0

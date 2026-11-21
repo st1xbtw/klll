@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 import traceback
 from pathlib import Path
 
@@ -308,6 +309,7 @@ def _render_one(proj: dict, clip: dict, src: Path, d: Path, words, segments, pre
             watermark=watermark or None, font=family, pos=pos, effect=effect)
     out = cdir / "clip.mp4"
     if len(segs) == 1:
+        t0 = time.time()
         res = render.render_clip(src, start, dur, plans[0], ass, out, preset, cancel,
                                  framing=framing, src_w=proj["src_w"], src_h=proj["src_h"],
                                  out_w=out_w, out_h=out_h, fps=fps)
@@ -315,6 +317,8 @@ def _render_one(proj: dict, clip: dict, src: Path, d: Path, words, segments, pre
         res = render.render_segments(src, [tuple(x) for x in segs], plans, framing,
                                      proj["src_w"], proj["src_h"], ass, out, preset, cancel,
                                      out_w=out_w, out_h=out_h, fps=fps)
+    if len(segs) == 1:
+        note_render_speed(out_w * out_h * fps * dur, time.time() - t0)
     render.make_thumb(out, cdir / "thumb.jpg")
     meta = text_ai.describe(clip_text, hook, ctype)
     platforms = text_ai.describe_platforms(clip_text, hook, ctype)
@@ -337,8 +341,40 @@ def save_dir_setting() -> str:
         return ""
 
 
-def save_to_folder(proj: dict, root: Path) -> Path:
-    """Копирует готовые клипы и ZIP в папку root/<название [id]>/. Возвращает путь папки."""
+_speed_lock = threading.Lock()
+
+
+def note_render_speed(units: float, seconds: float) -> None:
+    """Обновляет скорость рендера (экспоненциальное среднее) по одному отрезку клипа."""
+    if seconds <= 0.5 or units <= 0:
+        return
+    observed = units / seconds
+    with _speed_lock:
+        try:
+            cur = float(json.loads(config.CALIBRATION_FILE.read_text(encoding="utf-8"))["speed"])
+        except (OSError, ValueError, KeyError, TypeError):
+            cur = config.RENDER_SPEED_DEFAULT
+        new = 0.7 * cur + 0.3 * observed
+        config.CALIBRATION_FILE.write_text(json.dumps({"speed": new}), encoding="utf-8")
+
+
+def render_speed() -> float:
+    try:
+        return float(json.loads(config.CALIBRATION_FILE.read_text(encoding="utf-8"))["speed"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return config.RENDER_SPEED_DEFAULT
+
+
+def save_min_score_setting() -> int:
+    try:
+        return int(json.loads(config.SETTINGS_FILE.read_text(encoding="utf-8")).get("save_min_score") or 0)
+    except (OSError, ValueError, AttributeError):
+        return 0
+
+
+def save_to_folder(proj: dict, root: Path, min_score: int = 0) -> Path:
+    """Копирует готовые клипы и ZIP в папку root/<название [id]>/. Возвращает путь папки.
+    min_score — клипы с силой момента ниже порога не копируются (вручную добавленные клипы без оценки копируются всегда)."""
     import re
     import shutil
     d = _pdir(proj["id"])
@@ -346,29 +382,34 @@ def save_to_folder(proj: dict, root: Path) -> Path:
     dest = Path(root) / (f"{title} [{proj['id']}]" if title else proj["id"])
     dest.mkdir(parents=True, exist_ok=True)
     copied = 0
+    kept = []
     for c in proj.get("clips", []):
+        if min_score and c.get("score") is not None and c["score"] < min_score:
+            continue
         src = d / c["file"] if c.get("file") else None
         if src and src.exists():
             shutil.copy2(src, dest / f"clip_{c['index']:02d}.mp4")
+            kept.append(c)
             copied += 1
     if not copied:
-        raise ToolError("Нет готовых клипов для сохранения")
-    export_zip(proj, dest / f"{proj['id']}_clips.zip")
+        raise ToolError("Нет готовых клипов для сохранения" + (" с силой не ниже порога" if min_score else ""))
+    export_zip(proj, dest / f"{proj['id']}_clips.zip", only=kept)
     return dest
 
 
-def export_zip(proj: dict, dest: Path) -> Path:
+def export_zip(proj: dict, dest: Path, only: list | None = None) -> Path:
     import zipfile
     d = _pdir(proj["id"])
     dest.parent.mkdir(parents=True, exist_ok=True)
-    ready = [c for c in proj["clips"] if c.get("file") and (d / c["file"]).exists()]
+    ready = [c for c in (only if only is not None else proj["clips"])
+             if c.get("file") and (d / c["file"]).exists()]
     if not ready:
         raise ToolError("Нет готовых клипов для архива")
     meta = {
         "project": proj["id"], "source": proj["source"], "content_type": proj["content_type"],
         "clips": [{k: c.get(k) for k in ("index", "start", "end", "duration", "score", "reason",
                                          "hook", "description", "hashtags", "text", "file",
-                                         "aspect", "quality", "fps")}
+                                         "aspect", "quality", "fps", "publish_at")}
                   for c in ready],
     }
     with zipfile.ZipFile(dest, "w", compression=zipfile.ZIP_DEFLATED) as z:

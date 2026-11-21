@@ -552,3 +552,7 @@ canvas#timeline { width: 100%; height: 54px; border-radius: 12px; background: va
 .sub-handle.drag { cursor: grabbing; transform: translate(-50%, -100%) scale(1.04); }
 .sub-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; }
 .sub-foot .hint { margin: 0; }
+
+/* оценка времени рендера и план публикации */
+.estimate { text-align: center; margin-top: 8px; font-size: 12.5px; min-height: 16px; }
+.schedule-field { margin-top: 10px; }

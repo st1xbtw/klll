@@ -208,6 +208,11 @@ def run() -> int:
 
         # Смена стиля субтитров (перерендер без транскрибации)
         expect(page.locator("#statusText")).to_contain_text("Готово", timeout=600000)
+        # Ждём, пока сервер реально закончит предыдущий перерендер (статус done), иначе UI заблокирует смену стиля
+        page.wait_for_function(
+            f"fetch('/api/projects/{PID}').then(r => r.json()).then(p => p.status === 'done')",
+            timeout=600000)
+        page.wait_for_timeout(1500)  # дать UI получить свежий статус
         # Выбираем стиль, отличный от текущего: иначе change не сработает и тост не появится
         target = "violet" if page.locator("#subStyle").input_value() == "yellow" else "yellow"
         page.locator("#subStyle").select_option(target)
