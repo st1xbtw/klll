@@ -153,3 +153,13 @@ def test_schedule_endpoint_stores_date(tmp_path, monkeypatch):
         assert client.post(f"/api/projects/{p['id']}/clips/9/schedule", json={"publish_at": ""}).status_code == 404
     finally:
         storage.delete_project(p["id"])
+
+
+def test_effects_list_survives_font_scan_failure(monkeypatch):
+    from harness import fonts
+    def broken():
+        raise ImportError("No module named 'fontTools'")
+    monkeypatch.setattr(fonts, "list_fonts", broken)
+    data = TestClient(server.create_app(jobs=_Jobs())).get("/api/fonts").json()
+    assert data["fonts"] == []
+    assert set(data["effects"]) == {"none", "fade", "slide", "glow", "pop"}

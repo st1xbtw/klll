@@ -129,7 +129,12 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
 
     @app.get("/api/fonts")
     def list_fonts():
-        return {"fonts": fonts.list_fonts(), "effects": config.SUB_EFFECTS}
+        try:
+            items = fonts.list_fonts()
+        except Exception as exc:  # шрифты — необязательная часть: эффекты и работа приложения не должны зависеть от них
+            print(f"Список шрифтов недоступен: {exc}", flush=True)
+            items = []
+        return {"fonts": items, "effects": config.SUB_EFFECTS}
 
     @app.post("/api/fonts")
     async def upload_font(file: UploadFile = File(...)):

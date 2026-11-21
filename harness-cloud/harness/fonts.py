@@ -19,8 +19,8 @@ _cache: dict = {"key": None, "items": []}
 
 
 def _family(path: Path) -> str | None:
-    from fontTools.ttLib import TTFont
     try:
+        from fontTools.ttLib import TTFont
         t = TTFont(str(path), lazy=True, fontNumber=0)
         name = t["name"].getDebugName(1)
         t.close()

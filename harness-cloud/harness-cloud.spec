@@ -14,7 +14,7 @@ datas = [("ui", "ui"), ("models", "models"), ("fonts", "fonts")]
 binaries = []
 hiddenimports = []
 
-for pkg in ("faster_whisper", "ctranslate2", "yt_dlp", "webview", "tokenizers"):
+for pkg in ("faster_whisper", "ctranslate2", "yt_dlp", "webview", "tokenizers", "fontTools"):
     d, b, h = collect_all(pkg)
     datas += d
     binaries += b

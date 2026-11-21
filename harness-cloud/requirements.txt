@@ -8,3 +8,4 @@ numpy>=1.26
 pillow>=10.0
 pywebview>=5.0
 av==13.1.0
+fonttools>=4.40
