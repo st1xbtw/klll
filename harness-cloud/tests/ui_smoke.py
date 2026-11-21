@@ -208,7 +208,9 @@ def run() -> int:
 
         # Смена стиля субтитров (перерендер без транскрибации)
         expect(page.locator("#statusText")).to_contain_text("Готово", timeout=600000)
-        page.locator("#subStyle").select_option("yellow")
+        # Выбираем стиль, отличный от текущего: иначе change не сработает и тост не появится
+        target = "violet" if page.locator("#subStyle").input_value() == "yellow" else "yellow"
+        page.locator("#subStyle").select_option(target)
         expect(page.locator("#toasts .toast").last).to_contain_text("стилем")
         expect(page.locator("#statusText")).to_contain_text("Нарезка", timeout=15000)
         expect(page.locator("#statusText")).to_contain_text("Готово", timeout=900000)

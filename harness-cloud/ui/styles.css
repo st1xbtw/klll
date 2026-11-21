@@ -461,6 +461,10 @@ canvas#timeline { width: 100%; height: 54px; border-radius: 12px; background: va
 .settings-page { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 20px; max-width: 880px; }
 .settings-page .switch-row, .settings-page .row-end, .settings-page .hotkeys { grid-column: 1 / -1; }
 .row-end { display: flex; justify-content: flex-end; }
+.save-dir-field { grid-column: 1 / -1; }
+.save-dir-row { display: flex; gap: 10px; align-items: center; }
+.save-dir-row .input { flex: 1; min-width: 0; }
+.save-dir-field .hint { color: var(--muted); font-size: 12px; }
 .hotkeys { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text-2); }
 .about { max-width: 780px; color: var(--text-2); font-size: 14px; line-height: 1.6; }
 .about p { margin: 0 0 10px; }

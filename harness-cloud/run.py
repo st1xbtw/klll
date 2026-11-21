@@ -80,6 +80,18 @@ def _window_failed(reason: str, server, url: str) -> int:
     return 0
 
 
+def _attach_folder_picker(window) -> None:
+    """Выбор папки сохранения системным диалогом окна (кнопка «Выбрать» в настройках)."""
+    from harness import server as server_api
+
+    def pick() -> str:
+        import webview
+        chosen = window.create_file_dialog(webview.FOLDER_DIALOG)
+        return chosen[0] if chosen else ""
+
+    server_api.FOLDER_PICKER = pick
+
+
 def main(argv: list[str] | None = None) -> int:
     _ensure_std_streams()
     ap = argparse.ArgumentParser(description=config.APP_NAME)
@@ -108,7 +120,8 @@ def main(argv: list[str] | None = None) -> int:
         except Exception as exc:
             return _window_failed(f"Не найден модуль окна pywebview: {exc}", server, url)
         try:
-            webview.create_window(config.APP_NAME, url, width=1280, height=820, min_size=(960, 640))
+            window = webview.create_window(config.APP_NAME, url, width=1280, height=820, min_size=(960, 640))
+            _attach_folder_picker(window)
             webview.start()
         except Exception as exc:
             return _window_failed(f"Окно приложения не открылось: {exc}", server, url)

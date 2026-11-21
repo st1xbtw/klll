@@ -1,11 +1,15 @@
 """Модули 5–6: поиск сильных моментов и ранжирование.
 
-Признаки считаются по секундам:
-  loud      — громкость (RMS, нормирована по всему видео)
-  density   — плотность речи (слов/сек; если текста нет — доля голосовой энергии)
-  emotion   — смена эмоций: скачок энергии и спектрального центроида между половинами окна
+Сильный момент — это не «громко в среднем», а динамика: что-то резко меняется на фоне остального видео.
+Признаки считаются по секундам и нормируются по всему видео:
+  peak      — пик громкости относительно локального фона (контраст в 2^k раз, окно фона 31 с)
+  burst     — доля секунд окна, где громкость выше фона примерно вдвое
+  rise      — нарастание: вторая половина окна громче первой (сборка к кульминации)
+  variance  — разброс громкости внутри окна (ровный шум не набирает баллы)
+  hits      — резкие удары: скачки громкости больше 6 дБ за 0.1 с
+  tempo     — смена темпа речи (слов/сек относительно соседних секунд; без текста — энергия речи)
   keywords  — ключевые слова (словарь зависит от типа контента)
-  pauses    — доля длинных пауз (штраф)
+Штрафы: много пауз, нет пика вообще.
 Окна по 30 с с шагом 1 с; выбираются непересекающиеся лучшие окна с фильтром дубликатов.
 """
 from __future__ import annotations
@@ -75,6 +79,23 @@ def _tokens(text: str) -> list[str]:
     return re.findall(r"[a-zA-Zа-яА-ЯёЁ']+", text.lower())
 
 
+def _db_per_tenth(samples: np.ndarray, sr: int) -> np.ndarray:
+    hop = max(sr // 10, 1)
+    n = max(len(samples) // hop, 1)
+    if len(samples) >= hop:
+        frames = samples[: n * hop].reshape(n, hop)
+    else:
+        frames = np.pad(samples, (0, hop - len(samples)))[None, :]
+    return 20.0 * np.log10(np.sqrt(np.mean(frames ** 2, axis=1) + 1e-12) + 1e-6)
+
+
+def _rolling_median(x: np.ndarray, win: int) -> np.ndarray:
+    pad = win // 2
+    padded = np.pad(x, (pad, pad), mode="edge")
+    view = np.lib.stride_tricks.sliding_window_view(padded, win)
+    return np.median(view, axis=1)
+
+
 def build_features(samples: np.ndarray, words: list[dict] | None, content_type: str,
                    duration: float) -> dict:
     n = int(np.ceil(duration))
@@ -83,7 +104,18 @@ def build_features(samples: np.ndarray, words: list[dict] | None, content_type: 
     rms = np.pad(rms, (0, max(0, n - len(rms))))
     cen = np.pad(cen, (0, max(0, n - len(cen))))
 
-    voiced = (rms > np.percentile(rms, 40) * 1.5).astype(float)  # грубый VAD по энергии
+    # Контраст с фоном: громкость секунды относительно медианы соседних 31 секунд.
+    baseline = _rolling_median(rms, 31)
+    contrast = np.log2((rms + 1e-6) / (baseline + 1e-6))  # 1.0 = вдвое громче фона
+    up = np.clip(contrast, 0.0, 3.0) / 3.0
+
+    # Резкие удары: скачки громкости больше 6 дБ между соседними десятыми долями секунды.
+    db = _db_per_tenth(samples, SR)
+    jumps = np.diff(db, prepend=db[0]) > 6.0
+    per_sec = int(np.ceil(len(jumps) / 10.0))
+    jumps = np.pad(jumps.astype(float), (0, per_sec * 10 - len(jumps)))
+    hits = jumps.reshape(per_sec, 10).sum(axis=1)[:n]
+    hits = np.pad(hits, (0, max(0, n - len(hits))))
 
     kw_set = KEYWORDS_GAME if content_type == "game" else KEYWORDS_COMMON
     word_per_sec = np.zeros(n)
@@ -99,45 +131,68 @@ def build_features(samples: np.ndarray, words: list[dict] | None, content_type: 
             if w["w"].lower().strip(".,!?;:") in kw_set:
                 kw_per_sec[i] += 1
     else:
-        word_per_sec = voiced * 2.5  # прокси плотности речи без транскрипта
+        word_per_sec = (rms > np.percentile(rms, 40) * 1.5).astype(float) * 2.5  # прокси темпа речи
+
+    # Темп: сглаженная плотность речи за 5 секунд; смена темпа — разница с соседним окном.
+    tempo = np.convolve(word_per_sec, np.ones(5) / 5.0, mode="same")
 
     # Пауза — секунда без голоса (энергия ниже порога).
     silent = (rms < np.percentile(rms, 25) * 0.8).astype(float)
 
     return {
         "n": n,
-        "loud": _norm(rms),
-        "density": _norm(word_per_sec),
+        "rms": rms,
+        "loud": _norm(rms),  # для полосы громкости в редакторе
+        "contrast": contrast,
+        "up": up,
+        "hits": hits,
+        "tempo": tempo,
         "centroid": cen,
         "kw": kw_per_sec,
         "silent": silent,
-        "rms": rms,
         "text": text_per_sec,
         "has_words": bool(words),
     }
 
 
+WEIGHTS = {"peak": 0.22, "burst": 0.13, "rise": 0.15, "variance": 0.15,
+           "hits": 0.13, "tempo": 0.10, "keywords": 0.12}
+
+
 def score_windows(feat: dict, clip_len: float, content_type: str) -> list[Candidate]:
     n = feat["n"]
     L = int(round(clip_len))
-    cands: list[Candidate] = []
     if n < L:
-        return cands
-    cen_n = _norm(feat["centroid"])
-    for s in range(0, n - L + 1):
+        return []
+    half = L // 2
+    rms, up, contrast = feat["rms"], feat["up"], feat["contrast"]
+    hits, tempo, silent, kwv = feat["hits"], feat["tempo"], feat["silent"], feat["kw"]
+
+    starts = np.arange(0, n - L + 1)
+    raw = {k: np.zeros(len(starts)) for k in WEIGHTS}
+    pause = np.zeros(len(starts))
+    for j, s in enumerate(starts):
         e = s + L
-        loud = float(feat["loud"][s:e].mean())
-        dens = float(feat["density"][s:e].mean())
-        half = L // 2
-        e1 = float(feat["rms"][s:s + half].mean())
-        e2 = float(feat["rms"][s + half:e].mean())
-        emo_jump = abs(e2 - e1) / (max(e1, e2) + 1e-9)
-        emo = float(min(emo_jump, 1.0) * 0.6 + abs(cen_n[s + half:e].mean() - cen_n[s:s + half].mean()) * 0.4)
-        kw = float(min(feat["kw"][s:e].sum() / 6.0, 1.0))
-        pause = float(feat["silent"][s:e].mean())
-        total = 0.25 * loud + 0.25 * dens + 0.2 * emo + 0.2 * kw + 0.1 * (1 - pause)
-        parts = {"loud": loud, "density": dens, "emotion": emo, "keywords": kw, "calm": 1 - pause}
-        cands.append(Candidate(start=float(s), end=float(e), score=total, parts=parts))
+        raw["peak"][j] = up[s:e].max()
+        raw["burst"][j] = float((up[s:e] > 0.33).mean())
+        raw["rise"][j] = max(0.0, contrast[s + half:e].mean() - contrast[s:s + half].mean())
+        seg = rms[s:e]
+        raw["variance"][j] = float(seg.std() / (seg.mean() + 1e-9))
+        raw["hits"][j] = float(hits[s:e].sum()) / L
+        t = tempo[s:e]
+        raw["tempo"][j] = float(t.std() / (t.mean() + 0.5))
+        raw["keywords"][j] = float(min(kwv[s:e].sum() / 6.0, 1.0))
+        pause[j] = float(silent[s:e].mean())
+
+    norm = {k: _norm(v) for k, v in raw.items()}
+    total = sum(WEIGHTS[k] * norm[k] for k in WEIGHTS)
+    # Штрафы: почти тишина и много пауз; ровное видео без пиков не должно выигрывать.
+    total = total - 0.3 * np.clip(pause - 0.35, 0.0, 1.0) - 0.2 * (raw["peak"] < 0.2)
+
+    cands: list[Candidate] = []
+    for j, s in enumerate(starts):
+        parts = {k: float(norm[k][j]) for k in WEIGHTS}
+        cands.append(Candidate(start=float(s), end=float(s + L), score=float(max(total[j], 0.0)), parts=parts))
     return cands
 
 
@@ -190,11 +245,13 @@ def select_clips(cands: list[Candidate], feat: dict, count: int, clip_len: float
 
 def explain(parts: dict, content_type: str) -> str:
     labels = {
-        "density": "плотная речь",
-        "loud": "высокая энергия",
-        "emotion": "резкая смена эмоций",
+        "peak": "резкий всплеск громкости",
+        "burst": "несколько всплесков подряд",
+        "rise": "нарастание к кульминации",
+        "variance": "перепады громкости",
+        "hits": "резкие удары звука",
+        "tempo": "смена темпа речи",
         "keywords": "сильные ключевые слова" if content_type != "game" else "игровой экшн",
-        "calm": "без длинных пауз",
     }
     top = sorted(parts.items(), key=lambda kv: kv[1], reverse=True)[:3]
     return "Выбран за: " + ", ".join(labels[k] for k, _ in top)

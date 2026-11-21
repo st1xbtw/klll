@@ -703,6 +703,12 @@
       if (!texts.length) return toast("Нет готовых клипов", "err");
       try { await copyText(texts.join("\n\n")); toast("Описания всех клипов скопированы", "ok"); }
       catch (_) { toast("Не удалось скопировать", "err"); }
+    } else if (act === "save") {
+      if (!state.pid) return toast("Нет проекта", "err");
+      try {
+        const r = await api(`/api/projects/${state.pid}/save`, { method: "POST" });
+        toast(`Сохранено: ${r.path}`, "ok");
+      } catch (e) { toast(e.message, "err"); }
     } else if (act === "retry") {
       if (!state.pid) return toast("Нет проекта", "err");
       try { await api(`/api/projects/${state.pid}/retry`, { method: "POST" }); toast("Повтор с последнего шага"); startPolling(); }
@@ -902,6 +908,7 @@
     $("setModel").value = s.whisper_model;
     $("setPreset").value = s.export_preset;
     $("setNotify").checked = !!s.notify;
+    $("setSaveDir").value = s.save_dir || "";
   }
   async function saveSettings() {
     const body = {
@@ -911,6 +918,7 @@
       whisper_model: $("setModel").value,
       export_preset: $("setPreset").value,
       notify: $("setNotify").checked,
+      save_dir: $("setSaveDir").value.trim(),
     };
     try {
       state.settings = await api("/api/settings", { method: "PUT", body });
@@ -920,6 +928,14 @@
     } catch (e) { toast(e.message, "err"); }
   }
   $("saveSettings").addEventListener("click", saveSettings);
+  $("pickSaveDir").addEventListener("click", async () => {
+    try {
+      const r = await api("/api/pick-folder", { method: "POST" });
+      if (r.path) $("setSaveDir").value = r.path;
+    } catch (e) {
+      toast(e.message || "Выбор папки недоступен, введите путь вручную", "err");
+    }
+  });
   function applyFormDefaults() {
     const s = state.settings;
     $("clipCount").value = String(s.clip_count);

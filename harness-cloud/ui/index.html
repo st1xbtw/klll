@@ -211,6 +211,7 @@
                   <button class="icon-btn" id="moreBtn" data-icon="dots" title="Ещё"></button>
                   <div class="menu glass" id="moreMenu" hidden>
                     <button data-act="copyall">Скопировать все описания</button>
+                    <button data-act="save">Сохранить в папку</button>
                     <button data-act="retry">Повторить с ошибочного шага</button>
                     <button data-act="cancel">Отменить обработку</button>
                     <button data-act="delete" class="danger">Удалить проект</button>
@@ -302,6 +303,14 @@
           <label class="field">Пресет экспорта
             <select id="setPreset" class="select"></select>
           </label>
+          <div class="field save-dir-field">
+            <span>Папка сохранения</span>
+            <div class="save-dir-row">
+              <input id="setSaveDir" class="input input-sm" type="text" placeholder="Например, D:\Клипы (пусто — не сохранять)" spellcheck="false">
+              <button class="btn btn-ghost btn-sm" id="pickSaveDir" type="button">Выбрать…</button>
+            </div>
+            <small class="hint">Готовые клипы и ZIP копируются сюда автоматически после обработки.</small>
+          </div>
           <label class="switch-row"><span>Уведомлять о завершении</span><input type="checkbox" id="setNotify" class="switch" checked></label>
           <div class="row-end"><button class="btn btn-accent" id="saveSettings"><span data-icon="check"></span>Сохранить</button></div>
           <div class="hotkeys">

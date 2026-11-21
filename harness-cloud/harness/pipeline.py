@@ -326,6 +326,34 @@ def _render_one(proj: dict, clip: dict, src: Path, d: Path, words, segments, pre
     clip["status"] = "done"
 
 
+def save_dir_setting() -> str:
+    """Папка для сохранения клипов из настроек (пусто — не сохранять автоматически)."""
+    try:
+        return str(json.loads(config.SETTINGS_FILE.read_text(encoding="utf-8")).get("save_dir") or "").strip()
+    except (OSError, json.JSONDecodeError, AttributeError):
+        return ""
+
+
+def save_to_folder(proj: dict, root: Path) -> Path:
+    """Копирует готовые клипы и ZIP в папку root/<название [id]>/. Возвращает путь папки."""
+    import re
+    import shutil
+    d = _pdir(proj["id"])
+    title = re.sub(r'[\\/:*?"<>|\x00-\x1f]+', "_", (proj.get("title") or "").strip()).strip(" .")[:60]
+    dest = Path(root) / (f"{title} [{proj['id']}]" if title else proj["id"])
+    dest.mkdir(parents=True, exist_ok=True)
+    copied = 0
+    for c in proj.get("clips", []):
+        src = d / c["file"] if c.get("file") else None
+        if src and src.exists():
+            shutil.copy2(src, dest / f"clip_{c['index']:02d}.mp4")
+            copied += 1
+    if not copied:
+        raise ToolError("Нет готовых клипов для сохранения")
+    export_zip(proj, dest / f"{proj['id']}_clips.zip")
+    return dest
+
+
 def export_zip(proj: dict, dest: Path) -> Path:
     import zipfile
     d = _pdir(proj["id"])

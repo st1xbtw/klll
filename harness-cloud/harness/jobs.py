@@ -8,7 +8,25 @@ import queue
 import threading
 from typing import Callable
 
+from pathlib import Path
+
 from . import pipeline, storage
+
+
+def _auto_save(pid: str) -> None:
+    """Если в настройках задана папка сохранения, копирует туда готовые клипы. Ошибки — в предупреждения проекта."""
+    root = pipeline.save_dir_setting()
+    if not root:
+        return
+    proj = storage.load_project(pid)
+    if proj.get("status") != "done":
+        return
+    try:
+        pipeline.save_to_folder(proj, Path(root))
+    except Exception as exc:  # сохранение не должно ломать готовый проект
+        proj = storage.load_project(pid)
+        proj.setdefault("warnings", []).append(f"Не удалось сохранить в папку: {exc}")
+        storage.save_project(proj)
 
 
 class JobManager:
@@ -56,6 +74,7 @@ class JobManager:
                     storage.save_project(proj)
                 else:
                     pipeline.run(pid, ev, retry=retry)
+                    _auto_save(pid)
             except Exception as exc:  # защита рабочего потока
                 try:
                     proj = storage.load_project(pid)

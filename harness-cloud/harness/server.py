@@ -16,10 +16,27 @@ from . import config, fonts, ingest, pipeline, storage, tools, segments as sg
 from .jobs import JobManager
 
 DEFAULT_SETTINGS = {"theme": "dark", "clip_count": 8, "clip_length": 30, "subtitle_style": "violet",
-                    "whisper_model": "base", "export_preset": "tiktok", "notify": True}
+                    "whisper_model": "base", "export_preset": "tiktok", "notify": True, "save_dir": ""}
+# Нативный выбор папки. Задаёт run.py при запуске окна pywebview; None — выбор недоступен (браузер).
+FOLDER_PICKER = None
 RANGE_RE = re.compile(r"bytes=(\d*)-(\d*)")
 CONTENT_OK = set(config.CONTENT_TYPES)
 FRAMINGS = {"face": "По лицу", "fit": "Вписать с фоном"}
+
+
+def _checked_dir(value) -> str:
+    """Проверяет папку сохранения: пусто или абсолютный путь, который можно создать."""
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    path = Path(text).expanduser()
+    if not path.is_absolute():
+        raise HTTPException(400, "Укажите полный путь к папке")
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise HTTPException(400, f"Не удалось создать папку: {exc}")
+    return str(path)
 
 
 def _read_settings() -> dict:
@@ -149,6 +166,8 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
     async def put_settings(request: Request):
         body = await request.json()
         s = {**_read_settings(), **{k: v for k, v in body.items() if k in DEFAULT_SETTINGS}}
+        if "save_dir" in s:
+            s["save_dir"] = _checked_dir(s["save_dir"])
         config.SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
         config.SETTINGS_FILE.write_text(json.dumps(s, ensure_ascii=False, indent=2), encoding="utf-8")
         return s
@@ -288,6 +307,8 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
             c["subtitles"] = proj["options"].get("subtitles", proj["content_type"] != "game")
             if body.get("subtitle_style") in config.SUBTITLE_STYLES:
                 c["style"] = body["subtitle_style"]
+        proj["status"] = "queued"          # до старта рабочего потока показываем «В очереди», а не «Готово»
+        proj["stage"] = "В очереди"
         storage.save_project(proj)
         holder["jobs"].submit(pid, retry=True)
         return {"ok": True}
@@ -444,6 +465,30 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
             raise HTTPException(404, "Клип ещё не готов")
         return FileResponse(storage.project_dir(pid) / clip["file"], media_type="video/mp4",
                             filename=f"clip_{idx:02d}.mp4")
+
+    @app.post("/api/projects/{pid}/save")
+    def save_project_files(pid: str):
+        root = pipeline.save_dir_setting()
+        if not root:
+            raise HTTPException(400, "Папка сохранения не выбрана: укажите её в настройках")
+        proj = storage.load_project(pid)
+        try:
+            dest = pipeline.save_to_folder(proj, Path(root))
+        except tools.ToolError as exc:
+            raise HTTPException(409, str(exc))
+        except OSError as exc:
+            raise HTTPException(500, f"Не удалось записать в папку: {exc}")
+        return {"path": str(dest)}
+
+    @app.post("/api/pick-folder")
+    def pick_folder():
+        if FOLDER_PICKER is None:
+            raise HTTPException(501, "Выбор папки доступен в окне приложения. Введите путь вручную.")
+        try:
+            chosen = FOLDER_PICKER()
+        except Exception as exc:
+            raise HTTPException(500, f"Не удалось открыть диалог: {exc}")
+        return {"path": chosen or ""}
 
     @app.get("/api/projects/{pid}/zip")
     def download_all(pid: str):
