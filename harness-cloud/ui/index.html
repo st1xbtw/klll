@@ -130,6 +130,18 @@
                   <option value="1:1">1:1 — квадрат</option>
                 </select>
               </label>
+              <label class="field">Качество
+                <select id="quality" class="select">
+                  <option value="480p">480p — экономия места, быстрый экспорт</option>
+                  <option value="720p">720p — HD</option>
+                  <option value="1080p" selected>1080p — Full HD</option>
+                  <option value="2k">2K — 1440p, повышенная детализация</option>
+                  <option value="4k">4K — 2160p, рендер заметно дольше</option>
+                </select>
+              </label>
+              <label class="field">Частота кадров
+                <select id="fps" class="select"><option value="20">20 FPS</option><option value="24">24 FPS</option><option value="25">25 FPS</option><option value="30" selected>30 FPS</option><option value="48">48 FPS</option><option value="50">50 FPS</option><option value="60">60 FPS</option><option value="90">90 FPS</option><option value="120">120 FPS</option></select>
+              </label>
               <label class="field">Водяной знак (название канала, до 40 символов)
                 <input id="watermark" class="input" maxlength="40" placeholder="например, @my_channel" autocomplete="off">
               </label>
@@ -325,10 +337,108 @@
       <!-- ============ О ПРИЛОЖЕНИИ ============ -->
       <section class="view" id="view-about">
         <header class="topbar"><div class="hero"><h1>О приложении</h1><p class="sub" id="aboutSub">Harness Cloud</p></div></header>
-        <div class="card glass about">
-          <p>Режет длинные подкасты, стримы и видео на клипы 30 с: 9:16, 16:9, 4:3 или 1:1, H.264 + AAC.</p>
-          <p>Используйте только видео, на которые у вас есть права.</p>
-          <p id="aboutMeta" class="hint"></p>
+        <div class="about-page">
+
+          <div class="card glass about-hero">
+            <div class="about-tag">Умный видеомонтаж. От длинного видео до готовых клипов.</div>
+            <p>Harness Cloud — desktop-приложение для автоматического поиска интересных моментов, нарезки и монтажа коротких
+              видеороликов с помощью технологий искусственного интеллекта.</p>
+            <p>Вместо того чтобы пересматривать многочасовые записи, искать удачные моменты, нарезать видео и добавлять субтитры,
+              достаточно загрузить исходник и доверить основную работу Harness Cloud.</p>
+            <p id="aboutMeta" class="hint"></p>
+          </div>
+
+          <div class="about-section-title">Основные возможности</div>
+          <div class="about-grid">
+            <article class="card glass feature">
+              <span class="num">01</span><h3>Поиск интересных моментов</h3>
+              <p>Анализирует речь, эмоциональность, громкость, паузы, ключевые слова и плотность разговора. Каждый момент получает
+                оценку силы и место в рейтинге.</p>
+            </article>
+            <article class="card glass feature">
+              <span class="num">02</span><h3>Умная нарезка</h3>
+              <p>Клипы около 30 секунд. Выбирайте от 5 до 10 роликов: система подбирает отрезки без повторов и пересечений.</p>
+            </article>
+            <article class="card glass feature">
+              <span class="num">03</span><h3>Автоматическое кадрирование</h3>
+              <p>Находит лицо говорящего и ведёт кадр за ним, без резких движений. Если лицо не найдено, берётся центр кадра.</p>
+            </article>
+            <article class="card glass feature">
+              <span class="num">04</span><h3>Интеллектуальные субтитры</h3>
+              <p>Пословная подсветка речи, настройка шрифта, цвета, положения и эффектов появления. Субтитры встраиваются в видео
+                и учитывают безопасные зоны TikTok, Shorts и Reels.</p>
+            </article>
+            <article class="card glass feature">
+              <span class="num">05</span><h3>Хуки для первых секунд</h3>
+              <p>Короткие заголовки, которые удерживают внимание в первые 2–3 секунды. Для игрового контента есть отдельный режим
+                без субтитров и хуков.</p>
+            </article>
+            <article class="card glass feature">
+              <span class="num">06</span><h3>Подготовка к публикации</h3>
+              <p>Клипы сразу готовы для TikTok, YouTube Shorts и Instagram Reels. Размеры подгонять не нужно.</p>
+            </article>
+            <article class="card glass feature">
+              <span class="num">07</span><h3>История проектов</h3>
+              <p>Все проекты сохраняются. Можно вернуться к работе, посмотреть клипы, обоснование выбора и текст хука, экспортировать снова.</p>
+            </article>
+            <article class="card glass feature">
+              <span class="num">08</span><h3>Массовый экспорт</h3>
+              <p>«Скачать всё» собирает клипы в один ZIP вместе с файлом metadata.json. Отдельные клипы, описания и хештеги тоже
+                копируются в один клик.</p>
+            </article>
+          </div>
+
+          <div class="about-split">
+            <section class="card glass about-block">
+              <h2>Качество и экспорт</h2>
+              <p>Разрешение и частоту кадров выбирают для каждого проекта. Готовые клипы рендерятся именно с этими параметрами
+                и скачиваются в них же.</p>
+              <div class="chips-row">
+                <span class="tag">480p</span><span class="tag">720p</span><span class="tag accent">1080p</span>
+                <span class="tag">2K</span><span class="tag">4K</span>
+              </div>
+              <div class="chips-row">
+                <span class="tag">20–120 FPS</span><span class="tag">MP4 · H.264 · AAC</span>
+              </div>
+            </section>
+
+            <section class="card glass about-block">
+              <h2>Источники видео</h2>
+              <div class="chips-row">
+                <span class="tag">YouTube</span><span class="tag">Twitch VOD</span><span class="tag">Прямые ссылки</span>
+                <span class="tag">MP4 и M3U8</span><span class="tag">Локальные файлы</span>
+              </div>
+              <p>Можно добавить несколько ссылок сразу и выстроить очередь обработки.</p>
+            </section>
+          </div>
+
+          <section class="card glass about-block">
+            <h2>Дополнительно</h2>
+            <ul class="about-list">
+              <li>Предпросмотр готовых клипов прямо в приложении</li>
+              <li>Ручная подрезка начала и конца видео</li>
+              <li>Настройка стиля субтитров, шрифтов, цветов и эффектов</li>
+              <li>Генерация описаний и хештегов</li>
+              <li>Очередь обработки нескольких видео</li>
+              <li>Отслеживание прогресса каждого клипа</li>
+              <li>Отмена и повтор обработки</li>
+              <li>Горячие клавиши и уведомления о завершении</li>
+            </ul>
+          </section>
+
+          <div class="about-section-title">Для кого</div>
+          <div class="about-grid about-audience">
+            <article class="card glass feature"><h3>Блогеры</h3><p>Быстро превращайте длинные записи в короткие публикации.</p></article>
+            <article class="card glass feature"><h3>Стримеры</h3><p>Находите игровые моменты и нарезайте лучшие фрагменты трансляций.</p></article>
+            <article class="card glass feature"><h3>Подкастеры</h3><p>Превращайте долгие разговоры в отдельные короткие ролики.</p></article>
+            <article class="card glass feature"><h3>Контент-мейкеры</h3><p>Ускоряйте производство для нескольких площадок.</p></article>
+            <article class="card glass feature"><h3>SMM-специалисты</h3><p>Готовьте большое количество коротких публикаций без рутины.</p></article>
+          </div>
+
+          <div class="card glass about-closing">
+            <div class="quote">Меньше ручного монтажа. Больше качественного контента.</div>
+            <p class="note">Используйте только видео, на которые у вас есть права.</p>
+          </div>
         </div>
       </section>
     </main>

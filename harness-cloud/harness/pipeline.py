@@ -168,6 +168,8 @@ def run(pid: str, cancel: threading.Event, retry: bool = False) -> dict:
                     "segments": [[c.start, c.end]], "origin": "auto",
                     "framing": proj["options"].get("framing", "face"),
                     "aspect": proj["options"].get("aspect", config.DEFAULT_ASPECT),
+                    "quality": proj["options"].get("quality", config.DEFAULT_QUALITY),
+                    "fps": proj["options"].get("fps", config.DEFAULT_FPS),
                     "sub_box": bool(proj["options"].get("sub_box")),
                     "sub_emoji": bool(proj["options"].get("sub_emoji")),
                     "sub_anim": bool(proj["options"].get("sub_anim")),
@@ -272,7 +274,8 @@ def _render_one(proj: dict, clip: dict, src: Path, d: Path, words, segments, pre
                  if any(a - 0.05 <= s["start"] and s["end"] <= b + 0.05 for a, b in segs) and s["text"]]
 
     framing = clip.get("framing") or "face"
-    out_w, out_h = config.out_size(clip.get("aspect"))
+    out_w, out_h = config.out_size(clip.get("aspect"), clip.get("quality"))
+    fps = config.parse_fps(clip.get("fps")) or config.DEFAULT_FPS
     plans: list = []
     if framing == "face":
         for a, b in segs:
@@ -307,11 +310,11 @@ def _render_one(proj: dict, clip: dict, src: Path, d: Path, words, segments, pre
     if len(segs) == 1:
         res = render.render_clip(src, start, dur, plans[0], ass, out, preset, cancel,
                                  framing=framing, src_w=proj["src_w"], src_h=proj["src_h"],
-                                 out_w=out_w, out_h=out_h)
+                                 out_w=out_w, out_h=out_h, fps=fps)
     else:
         res = render.render_segments(src, [tuple(x) for x in segs], plans, framing,
                                      proj["src_w"], proj["src_h"], ass, out, preset, cancel,
-                                     out_w=out_w, out_h=out_h)
+                                     out_w=out_w, out_h=out_h, fps=fps)
     render.make_thumb(out, cdir / "thumb.jpg")
     meta = text_ai.describe(clip_text, hook, ctype)
     platforms = text_ai.describe_platforms(clip_text, hook, ctype)
@@ -364,7 +367,8 @@ def export_zip(proj: dict, dest: Path) -> Path:
     meta = {
         "project": proj["id"], "source": proj["source"], "content_type": proj["content_type"],
         "clips": [{k: c.get(k) for k in ("index", "start", "end", "duration", "score", "reason",
-                                         "hook", "description", "hashtags", "text", "file")}
+                                         "hook", "description", "hashtags", "text", "file",
+                                         "aspect", "quality", "fps")}
                   for c in ready],
     }
     with zipfile.ZipFile(dest, "w", compression=zipfile.ZIP_DEFLATED) as z:

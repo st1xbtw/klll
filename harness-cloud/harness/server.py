@@ -81,6 +81,8 @@ def _options(payload: dict) -> dict:
         "export_preset": payload.get("export_preset") or s["export_preset"],
         "framing": payload.get("framing") if payload.get("framing") in FRAMINGS else "face",
         "aspect": payload.get("aspect") if payload.get("aspect") in config.ASPECTS else config.DEFAULT_ASPECT,
+        "quality": payload.get("quality") if payload.get("quality") in config.QUALITIES else config.DEFAULT_QUALITY,
+        "fps": config.parse_fps(payload.get("fps")) or config.DEFAULT_FPS,
         "subtitles": _flag(payload["subtitles"]) if "subtitles" in payload else True,
         "watermark": str(payload.get("watermark") or "").strip()[:40],
         "sub_font": _clean_family(payload.get("sub_font")),
@@ -155,8 +157,10 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
                 "whisper_models": list(transcribe_models()), "ffmpeg": ffmpeg,
                 "clip": {"count_min": config.MIN_CLIPS, "count_max": config.MAX_CLIPS,
                          "length": config.CLIP_LEN, "tolerance": config.CLIP_TOL},
-                "output": {"w": config.OUT_W, "h": config.OUT_H, "fps": config.OUT_FPS},
-                "aspects": {k: list(v) for k, v in config.ASPECTS.items()}}
+                "output": {"w": config.OUT_W, "h": config.OUT_H, "fps": config.DEFAULT_FPS},
+                "aspects": {k: list(v) for k, v in config.ASPECTS.items()},
+                "qualities": config.QUALITY_LABELS, "fps_choices": config.FPS_CHOICES,
+                "fps_min": config.FPS_MIN, "fps_max": config.FPS_MAX}
 
     @app.get("/api/settings")
     def get_settings():
@@ -214,7 +218,8 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
                      whisper_model: str = Form("base"), export_preset: str = Form("tiktok"),
                      framing: str = Form("face"), sub_box: str = Form("0"),
                      sub_emoji: str = Form("0"), sub_anim: str = Form("0"),
-                     aspect: str = Form("9:16"), subtitles: str = Form("1"),
+                     aspect: str = Form("9:16"), quality: str = Form("1080p"), fps: int = Form(30),
+                     subtitles: str = Form("1"),
                      watermark: str = Form(""), sub_font: str = Form(""), sub_effect: str = Form("none")):
         ctype = _content_type(content_type)
         suffix = Path(file.filename or "video.mp4").suffix.lower()
@@ -230,7 +235,8 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
                 "clip_count": clip_count, "subtitle_style": subtitle_style,
                 "whisper_model": whisper_model, "export_preset": export_preset,
                 "framing": framing, "sub_box": sub_box, "sub_emoji": sub_emoji, "sub_anim": sub_anim,
-                "aspect": aspect, "subtitles": subtitles, "watermark": watermark,
+                "aspect": aspect, "quality": quality, "fps": fps,
+                "subtitles": subtitles, "watermark": watermark,
                 "sub_font": sub_font, "sub_effect": sub_effect}))
             # Оригинал переносим в папку проекта, исходник не трогаем.
             dest = storage.project_dir(proj["id"]) / ("source" + suffix)
@@ -277,6 +283,10 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
             proj["options"]["framing"] = body["framing"]
         if body.get("aspect") in config.ASPECTS:
             proj["options"]["aspect"] = body["aspect"]
+        if body.get("quality") in config.QUALITIES:
+            proj["options"]["quality"] = body["quality"]
+        if config.parse_fps(body.get("fps")):
+            proj["options"]["fps"] = config.parse_fps(body["fps"])
         if "subtitles" in body:
             proj["options"]["subtitles"] = _flag(body["subtitles"])
         if "watermark" in body:
@@ -299,6 +309,8 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
             c["sub_emoji"] = bool(proj["options"].get("sub_emoji"))
             c["sub_anim"] = bool(proj["options"].get("sub_anim"))
             c["aspect"] = proj["options"].get("aspect", config.DEFAULT_ASPECT)
+            c["quality"] = proj["options"].get("quality", config.DEFAULT_QUALITY)
+            c["fps"] = proj["options"].get("fps", config.DEFAULT_FPS)
             c["watermark"] = proj["options"].get("watermark", "")
             c["sub_font"] = proj["options"].get("sub_font", "")
             c["sub_effect"] = proj["options"].get("sub_effect", "none")
@@ -364,6 +376,8 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
             "segments": segs, "origin": origin,
             "framing": proj["options"].get("framing", "face"),
             "aspect": proj["options"].get("aspect", config.DEFAULT_ASPECT),
+            "quality": proj["options"].get("quality", config.DEFAULT_QUALITY),
+            "fps": proj["options"].get("fps", config.DEFAULT_FPS),
             "watermark": proj["options"].get("watermark", ""),
             "sub_font": proj["options"].get("sub_font", ""),
             "sub_effect": proj["options"].get("sub_effect", "none"),

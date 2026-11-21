@@ -215,6 +215,8 @@
     fd.append("sub_emoji", $("subEmoji").checked ? "1" : "0");
     fd.append("sub_anim", $("subAnim").checked ? "1" : "0");
     fd.append("aspect", $("aspect").value);
+    fd.append("quality", $("quality").value);
+    fd.append("fps", $("fps").value);
     fd.append("watermark", $("watermark").value.trim());
     fd.append("sub_font", $("subFont").value);
     fd.append("sub_effect", $("subEffect").value || "none");
@@ -243,7 +245,8 @@
         export_preset: $("exportPreset").value,
         framing: $("framing").value,
         sub_box: $("subBox").checked, sub_emoji: $("subEmoji").checked, sub_anim: $("subAnim").checked,
-        aspect: $("aspect").value, subtitles: $("subsOn").checked,
+        aspect: $("aspect").value, quality: $("quality").value, fps: Number($("fps").value),
+        subtitles: $("subsOn").checked,
         watermark: $("watermark").value.trim(),
         sub_font: $("subFont").value, sub_effect: $("subEffect").value || "none",
       }});
@@ -760,6 +763,10 @@
     restyle({ framing: $("framing").value }, "Перерендер клипов с новым кадрированием"));
   $("aspect").addEventListener("change", () =>
     restyle({ aspect: $("aspect").value }, "Перерендер клипов в новом формате кадра"));
+  $("quality").addEventListener("change", () =>
+    restyle({ quality: $("quality").value }, "Перерендер клипов в новом качестве"));
+  $("fps").addEventListener("change", () =>
+    restyle({ fps: Number($("fps").value) }, "Перерендер клипов с новой частотой кадров"));
   $("watermark").addEventListener("change", () =>
     restyle({ watermark: $("watermark").value.trim() }, "Перерендер клипов с новым водяным знаком"));
   $("subsOn").addEventListener("change", () =>
@@ -857,6 +864,8 @@
     if (o.subtitle_style) $("subStyle").value = o.subtitle_style;
     $("framing").value = o.framing || "face";
     $("aspect").value = o.aspect || "9:16";
+    $("quality").value = o.quality || "1080p";
+    $("fps").value = String(o.fps || 30);
     $("watermark").value = o.watermark || "";
     $("subsOn").checked = o.subtitles !== false;
     $("subEffect").value = o.sub_effect || "none";

@@ -81,4 +81,14 @@ def probe(path: str | Path) -> dict:
         "height": int(v["height"]) if v else 0,
         "has_video": v is not None,
         "has_audio": a is not None,
+        "fps": _rate(v.get("avg_frame_rate") or v.get("r_frame_rate")) if v else 0.0,
     }
+
+
+def _rate(text: str | None) -> float:
+    """'30000/1001' → 29.97."""
+    try:
+        num, den = (text or "0/1").split("/")
+        return float(num) / float(den) if float(den) else 0.0
+    except (ValueError, ZeroDivisionError):
+        return 0.0

@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 APP_NAME = "Harness Cloud"
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.3.0"
 
 # Выходной формат клипов (спецификация).
 OUT_W = 1080
@@ -25,9 +25,42 @@ def render_workers() -> int:
     return max(1, min(3, (os.cpu_count() or 2)))
 
 
-def out_size(aspect: str | None) -> tuple[int, int]:
-    return ASPECTS.get(aspect or DEFAULT_ASPECT, ASPECTS[DEFAULT_ASPECT])
-OUT_FPS = 30
+def out_size(aspect: str | None, quality: str | None = None) -> tuple[int, int]:
+    """Размер кадра: короткая сторона = выбранное качество, соотношение сторон — из формата кадра."""
+    aw, ah = (int(x) for x in (aspect or DEFAULT_ASPECT).split(":"))
+    short = QUALITIES.get(quality or DEFAULT_QUALITY, QUALITIES[DEFAULT_QUALITY])
+    if aw < ah:
+        w, h = short, short * ah / aw
+    elif aw > ah:
+        w, h = short * aw / ah, short
+    else:
+        w = h = short
+    return _even(w), _even(h)
+
+
+def _even(x: float) -> int:
+    return int(round(x / 2) * 2)  # кодек H.264 требует чётные размеры
+
+
+def parse_fps(value) -> int | None:
+    """Частота кадров из запроса: целое от FPS_MIN до FPS_MAX, иначе None."""
+    try:
+        fps = int(float(value))
+    except (TypeError, ValueError):
+        return None
+    return fps if FPS_MIN <= fps <= FPS_MAX else None
+
+
+# Качество: короткая сторона кадра в пикселях.
+QUALITIES = {"480p": 480, "720p": 720, "1080p": 1080, "2k": 1440, "4k": 2160}
+QUALITY_LABELS = {"480p": "480p — экономия места, быстрый экспорт", "720p": "720p — HD",
+                  "1080p": "1080p — Full HD", "2k": "2K — 1440p, повышенная детализация",
+                  "4k": "4K — 2160p, рендер заметно дольше"}
+DEFAULT_QUALITY = "1080p"
+FPS_MIN, FPS_MAX = 20, 120
+FPS_CHOICES = [20, 24, 25, 30, 48, 50, 60, 90, 120]
+DEFAULT_FPS = 30
+OUT_FPS = DEFAULT_FPS
 CLIP_LEN = 30.0          # секунд
 CLIP_TOL = 0.5           # допуск ± секунд
 MIN_CLIPS = 5
