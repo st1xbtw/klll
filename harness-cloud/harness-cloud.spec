@@ -4,6 +4,7 @@
 # Windows → dist/HarnessCloud/HarnessCloud.exe ; macOS → dist/HarnessCloud.app
 # ffmpeg/ffprobe кладутся в папку bin/ рядом со spec (см. scripts/).
 
+import os
 import sys
 from PyInstaller.utils.hooks import collect_all, collect_submodules
 
@@ -52,7 +53,7 @@ exe = EXE(
     strip=False,
     upx=False,
     console=False,
-    icon=None,
+    icon=os.path.join(SPECPATH, "ui", "assets", "icon.ico"),
 )
 coll = COLLECT(exe, a.binaries, a.zipfiles, a.datas, strip=False, upx=False, name="HarnessCloud")
 
