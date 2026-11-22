@@ -280,6 +280,7 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
             dest = storage.project_dir(proj["id"]) / ("source" + suffix)
             shutil.copy2(tmp_file, dest)
             proj["source"] = str(dest)
+            proj["title"] = Path(file.filename or "video").stem[:120]   # имя исходного файла для истории
             storage.save_project(proj)
         except ValueError as exc:
             shutil.rmtree(tmp, ignore_errors=True)

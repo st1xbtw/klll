@@ -17,6 +17,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from . import adfilter
+
 import numpy as np
 
 from . import config
@@ -229,6 +231,8 @@ def select_clips(cands: list[Candidate], feat: dict, count: int, clip_len: float
         c.text = " ".join(
             w["w"] for w in (words or []) if c.start <= w["s"] < c.end
         )
+        if adfilter.is_ad_text(c.text):          # рекламная вставка — не клип
+            continue
         if any(_jaccard(c.text, x.text) > 0.6 for x in chosen if c.text and x.text):
             continue
         c.start = _snap_to_pause(c.start, feat)

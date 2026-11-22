@@ -24,6 +24,9 @@ SEGMENT_SEC = 60        # длина одного сегмента записи
 WINDOW_SEC = 300        # окно, которое уходит в обработку
 MIN_TAIL_SEC = 120      # последний неполный кусок обрабатывается, если он не короче этого
 POLL_SEC = 5.0          # как часто проверяем, появилось ли готовое окно
+START_CHECK_SEC = 5.0  # если запись упала раньше, это ошибка старта, а не конец эфира
+START_RETRIES = 6      # стрим может только начинаться: плейлист ещё не готов
+START_RETRY_DELAY = 2.0
 
 
 def validate_live_url(url: str) -> str:
@@ -76,8 +79,8 @@ def concat_segments(names: list[str], out_name: str, cwd: Path) -> Path:
     return cwd / out_name
 
 
-def start_recorder(url: str, out_dir: Path) -> subprocess.Popen:
-    """Находит поток эфира через yt-dlp и запускает ffmpeg, который пишет сегменты seg_NNNNN.ts."""
+def resolve_stream(url: str) -> str:
+    """Адрес потока эфира через yt-dlp. Ошибка, если эфира сейчас нет."""
     try:
         import yt_dlp
     except ImportError as exc:
@@ -93,12 +96,21 @@ def start_recorder(url: str, out_dir: Path) -> subprocess.Popen:
     stream = info.get("url")
     if not stream:
         raise ToolError("Не удалось получить поток эфира")
+    return stream
+
+
+def record(stream: str, out_dir: Path) -> subprocess.Popen:
+    """ffmpeg пишет поток в сегменты seg_NNNNN.ts длиной SEGMENT_SEC без перекодирования."""
     log = open(out_dir / "recorder.log", "w", encoding="utf-8")
     cmd = [tools.ffmpeg_bin(), "-y", "-v", "error", "-i", stream, "-c", "copy",
            "-f", "segment", "-segment_time", str(SEGMENT_SEC), "-reset_timestamps", "1",
            "-segment_format", "mpegts", "seg_%05d.ts"]
     return subprocess.Popen(cmd, cwd=str(out_dir), stdin=subprocess.DEVNULL,
                             stdout=subprocess.DEVNULL, stderr=log, **hidden_kwargs())
+
+
+def start_recorder(url: str, out_dir: Path) -> subprocess.Popen:
+    return record(resolve_stream(url), out_dir)
 
 
 class LiveSession:
@@ -137,7 +149,7 @@ class LiveSession:
 
     def _run(self) -> None:
         try:
-            self._proc = self._recorder(self.url, self.dir)
+            self._proc = self._start_with_retries()
             self.status = "recording"
             while not self._stop.is_set():
                 self._flush(final=False)
@@ -152,6 +164,22 @@ class LiveSession:
             self._kill_proc()
             self.status = "error"
             self.error = str(exc)[-300:]
+
+    def _start_with_retries(self) -> subprocess.Popen:
+        """Запускает запись; если ffmpeg падает сразу, повторяет попытку, а потом сообщает ошибку."""
+        for _ in range(START_RETRIES):
+            proc = self._recorder(self.url, self.dir)
+            t0 = time.time()
+            while time.time() - t0 < START_CHECK_SEC and not self._stop.is_set():
+                if proc.poll() is not None:
+                    break
+                self._stop.wait(0.1)
+            if proc.poll() is None or self._stop.is_set():
+                return proc
+            self._stop.wait(START_RETRY_DELAY)
+        log = self.dir / "recorder.log"
+        tail = log.read_text(encoding="utf-8", errors="replace")[-200:] if log.exists() else ""
+        raise ToolError("Запись не запустилась" + (": " + tail if tail else ""))
 
     def _flush(self, final: bool) -> None:
         count = len(list(self.dir.glob("seg_*.ts")))

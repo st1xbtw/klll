@@ -52,6 +52,16 @@
           </div>
         </header>
 
+        <nav class="flow-nav" id="flow" aria-label="Шаги обработки">
+          <button class="flow-step" data-step="source" data-jump="area-source"><span class="flow-n">1</span><span class="flow-t">Источник</span></button>
+          <span class="flow-line" aria-hidden="true"></span>
+          <button class="flow-step" data-step="type" data-jump="area-type"><span class="flow-n">2</span><span class="flow-t">Тип</span></button>
+          <span class="flow-line" aria-hidden="true"></span>
+          <button class="flow-step" data-step="settings" data-jump="area-settings"><span class="flow-n">3</span><span class="flow-t">Настройки</span></button>
+          <span class="flow-line" aria-hidden="true"></span>
+          <button class="flow-step" data-step="run" data-jump="startBtn"><span class="flow-n">4</span><span class="flow-t">Запуск</span></button>
+        </nav>
+
         <div class="dash">
           <!-- Источник -->
           <section class="card area-source">

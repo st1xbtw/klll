@@ -198,6 +198,28 @@
   });
   document.querySelectorAll(".nav-item").forEach((b) => b.addEventListener("click", () => showView(b.dataset.view)));
 
+  // ---------- шаги на главной: что уже заполнено и куда перейти ----------
+  const STEP_ORDER = ["source", "type", "settings", "run"];
+  function updateSteps() {
+    const hasSource = parseUrls($("urlInput").value).length > 0 || !!state.project;
+    const status = state.project ? state.project.status : null;
+    const busy = status === "queued" || status === "running";
+    const done = { source: hasSource, type: true, settings: true, run: status === "done" };
+    const current = STEP_ORDER.find((k) => !done[k]) || "run";
+    document.querySelectorAll(".flow-step").forEach((b) => {
+      const key = b.dataset.step;
+      b.classList.toggle("done", !!done[key]);
+      b.classList.toggle("current", key === current);
+      b.classList.toggle("busy", key === "run" && busy);
+    });
+  }
+  document.querySelectorAll(".flow-step").forEach((b) => b.addEventListener("click", () => {
+    const target = document.getElementById(b.dataset.jump);
+    if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+  }));
+  setInterval(updateSteps, 1000);
+  updateSteps();
+
   // ---------- источник ----------
   function parseUrls(text) {
     return text.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
@@ -1016,7 +1038,9 @@
       if (!items.length) { box.innerHTML = '<div class="empty">Проектов пока нет</div>'; return; }
       box.innerHTML = items.map((p) => {
         const when = new Date((p.created || 0) * 1000).toLocaleString("ru-RU");
-        const title = (p.source || "").length > 80 ? p.source.slice(0, 80) + "…" : (p.source || "");
+        // Заголовок проекта; без него — имя файла (для ссылок — сам адрес), длинное обрезаем.
+        const raw = p.title || (/^https?:/i.test(p.source || "") ? p.source : (p.source || "").split(/[\\/]/).pop());
+        const title = (raw || "").length > 80 ? raw.slice(0, 80) + "…" : (raw || "");
         const st = { done: "Готово", running: "Обработка", queued: "В очереди", error: "Ошибка", cancelled: "Отменено" }[p.status] || p.status;
         return `<div class="hist-item" data-pid="${esc(p.id)}">
           <div class="hist-main">

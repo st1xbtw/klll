@@ -88,3 +88,91 @@ def test_live_endpoint_requires_rights_confirmation():
     r = client.post("/api/live", json={"url": "https://www.twitch.tv/x", "content_type": "general"})
     assert r.status_code == 400
     assert "права" in r.json()["detail"]
+
+
+def test_real_time_hls_recording_cuts_windows(tmp_path, monkeypatch):
+    """Настоящая запись живого потока: локальный HLS-плейлист растёт по сегменту каждые 2 с.
+
+    Нарезка заранее делается ffmpeg, а отдельный поток дописывает её в живой плейлист,
+    потому что ffmpeg с -re на слабой машине не успевает выдавать плейлист вовремя.
+    Длины сегмента и окна уменьшены ради скорости; запись и склейка настоящие."""
+    import http.server
+    import os
+    import shutil
+    import threading
+
+    monkeypatch.setattr(live, "SEGMENT_SEC", 2)
+    monkeypatch.setattr(live, "WINDOW_SEC", 10)     # 5 сегментов по 2 с
+    monkeypatch.setattr(live, "MIN_TAIL_SEC", 2)
+    monkeypatch.setattr(live, "POLL_SEC", 0.2)
+    monkeypatch.setattr(live, "START_CHECK_SEC", 1.0)
+    monkeypatch.setattr(live, "START_RETRY_DELAY", 0.5)
+    monkeypatch.setattr(live, "START_RETRIES", 12)
+
+    vod = tmp_path / "vod"
+    vod.mkdir()
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i",
+                    "testsrc=size=160x120:rate=10:duration=24", "-f", "lavfi", "-i",
+                    "sine=frequency=440:duration=24", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                    "-g", "20", "-keyint_min", "20", "-sc_threshold", "0",
+                    "-c:a", "aac", "-f", "hls", "-hls_time", "2", "-hls_list_size", "0",
+                    str(vod / "index.m3u8")], check=True)
+    segs = sorted((p for p in vod.glob("index*.ts")), key=lambda p: int(p.stem[5:]))
+    assert len(segs) >= 10
+
+    feed = tmp_path / "feed"
+    feed.mkdir()
+    stop_feed = threading.Event()
+
+    def feeder():
+        for i, seg in enumerate(segs):
+            if stop_feed.is_set():
+                return
+            shutil.copy(seg, feed / seg.name)
+            lines = ["#EXTM3U", "#EXT-X-VERSION:3", "#EXT-X-TARGETDURATION:2", "#EXT-X-MEDIA-SEQUENCE:0"]
+            for j in range(i + 1):
+                lines += ["#EXTINF:2.000,", segs[j].name]
+            tmp = feed / "index.tmp"
+            tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            os.replace(tmp, feed / "index.m3u8")
+            stop_feed.wait(2.0)
+
+    handler = lambda *a, **k: http.server.SimpleHTTPRequestHandler(*a, directory=str(feed), **k)
+    httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    threading.Thread(target=feeder, daemon=True).start()
+    stream = f"http://127.0.0.1:{httpd.server_address[1]}/index.m3u8"
+
+    windows = []
+
+    def on_window(path, label, ctype, options):
+        windows.append(path)
+        return f"pid-{len(windows)}"
+
+    mgr = live.LiveManager(tmp_path / "live", on_window=on_window,
+                           recorder=lambda _url, out: live.record(stream, out))
+    session = mgr.start("https://www.twitch.tv/somechannel", "general", {})
+    try:
+        for _ in range(400):
+            if windows:
+                break
+            time.sleep(0.1)
+        session.request_stop()
+        for _ in range(300):
+            if session.status in ("stopped", "ended", "error"):
+                break
+            time.sleep(0.1)
+    finally:
+        stop_feed.set()
+        httpd.shutdown()
+
+    assert session.status in ("stopped", "ended"), session.error
+    assert windows, "окно не появилось за время записи"
+    window = windows[0]
+    assert window.exists() and window.stat().st_size > 1000
+    probe = shutil.which("ffprobe")
+    if probe:
+        dur = subprocess.run([probe, "-v", "error", "-show_entries", "format=duration",
+                              "-of", "default=nw=1:nk=1", str(window)],
+                             capture_output=True, text=True).stdout.strip()
+        assert 7.0 <= float(dur) <= 13.0, dur

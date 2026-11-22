@@ -37,3 +37,32 @@ def test_rendered_clip_is_normalised_to_target_loudness(tmp_path):
     after = _integrated_lufs(out)
     assert before < -30
     assert abs(after - config.LOUDNESS_LUFS) <= 1.5
+
+
+def _quiet_source(path):
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i",
+                    "testsrc=size=640x360:rate=30:duration=12", "-f", "lavfi", "-i",
+                    "sine=frequency=440:duration=12", "-af", "volume=-30dB",
+                    "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+                    str(path)], check=True)
+
+
+def test_two_pass_measurement_hits_target_closely(tmp_path):
+    src = tmp_path / "quiet.mp4"
+    _quiet_source(src)
+    measured = render.measure_clip(src, 1.0, 6.0, tmp_path)
+    assert measured is not None and measured["input_i"] < -30
+    out = tmp_path / "clip.mp4"
+    render.render_clip(src, 1.0, 6.0, None, None, out, "tiktok", threading.Event(),
+                       framing="center", src_w=640, src_h=360, out_w=360, out_h=640, fps=30)
+    assert abs(_integrated_lufs(out) - config.LOUDNESS_LUFS) <= 0.5
+
+
+def test_segments_path_is_normalised_too(tmp_path):
+    src = tmp_path / "quiet.mp4"
+    _quiet_source(src)
+    out = tmp_path / "joined.mp4"
+    render.render_segments(src, [(0.5, 3.5), (6.0, 9.0)], [None, None], "center", 640, 360,
+                           None, out, "tiktok", threading.Event(),
+                           out_w=360, out_h=640, fps=30)
+    assert abs(_integrated_lufs(out) - config.LOUDNESS_LUFS) <= 0.8

@@ -82,15 +82,71 @@ def _encode_args(preset_key: str, fast: bool = False, out_w: int = config.OUT_W,
             "-movflags", "+faststart"]
 
 
-def audio_filter(total: float) -> str:
-    """Звук финального клипа: громкость к -14 LUFS (одним проходом) и короткие фейды на стыках.
+def _loudnorm_target() -> str:
+    return f"I={config.LOUDNESS_LUFS:g}:TP=-1.5:LRA=11"
 
-    Одним проходом loudnorm приближает громкость, но не точно; двухпроходной режим
-    (измерить, затем применить) даст точнее и запланирован отдельно.
-    """
+
+def _parse_loudnorm(stderr: str) -> dict | None:
+    """Разбирает JSON первого прохода loudnorm (печатается в stderr)."""
+    import json
+    i = stderr.rfind("{")
+    j = stderr.rfind("}")
+    if i < 0 or j < i:
+        return None
+    try:
+        data = json.loads(stderr[i:j + 1])
+        vals = {k: float(data[k]) for k in ("input_i", "input_tp", "input_lra", "input_thresh", "target_offset")}
+    except (ValueError, KeyError, TypeError):
+        return None
+    if any(v != v or v in (float("inf"), float("-inf")) for v in vals.values()):
+        return None
+    return vals
+
+
+def _measure(cmd: list[str], cwd: Path) -> dict | None:
+    """Первый проход: замер громкости без записи результата. None — замер не удался."""
+    proc = subprocess.run(cmd, cwd=str(cwd), capture_output=True, text=True, **hidden_kwargs())
+    if proc.returncode != 0:
+        return None
+    return _parse_loudnorm(proc.stderr)
+
+
+def measure_clip(src: Path, start: float, duration: float, cwd: Path) -> dict | None:
+    """Замер громкости звука диапазона исходника (для одного непрерывного отрезка)."""
+    af = f"loudnorm={_loudnorm_target()}:print_format=json"
+    cmd = [tools.ffmpeg_bin(), "-hide_banner", "-nostats", "-v", "info",
+           "-ss", f"{start:.3f}", "-t", f"{duration:.3f}", "-i", str(src),
+           "-map", "0:a:0", "-af", af, "-f", "null", "-"]
+    return _measure(cmd, cwd)
+
+
+def measure_parts(parts: list[Path], cwd: Path) -> dict | None:
+    """Замер громкости уже склеенного звука отрезков (для режима «по частям»)."""
+    n = len(parts)
+    inputs: list[str] = []
+    for p in parts:
+        inputs += ["-i", str(p.resolve())]
+    fc = "".join(f"[{i}:a]" for i in range(n)) + \
+        f"concat=n={n}:v=0:a=1,loudnorm={_loudnorm_target()}:print_format=json[a]"
+    cmd = [tools.ffmpeg_bin(), "-hide_banner", "-nostats", "-v", "info", *inputs,
+           "-filter_complex", fc, "-map", "[a]", "-f", "null", "-"]
+    return _measure(cmd, cwd)
+
+
+def audio_filter(total: float, measured: dict | None = None) -> str:
+    """Звук финального клипа: громкость к -14 LUFS и короткие фейды на стыках.
+
+    С замером (measured, двухпроходный режим) loudnorm получает измеренные значения и
+    применяет линейную поправку — результат точный. Без замера — одноходовой режим."""
     fade_out_at = max(0.0, total - 0.05)
-    return (f"loudnorm=I={config.LOUDNESS_LUFS:g}:TP=-1.5:LRA=11,"
-            f"afade=t=in:st=0:d=0.03,afade=t=out:st={fade_out_at:.3f}:d=0.05")
+    if measured:
+        norm = (f"loudnorm={_loudnorm_target()}:linear=true"
+                f":measured_I={measured['input_i']:.2f}:measured_TP={measured['input_tp']:.2f}"
+                f":measured_LRA={measured['input_lra']:.2f}:measured_thresh={measured['input_thresh']:.2f}"
+                f":offset={measured['target_offset']:.2f}")
+    else:
+        norm = f"loudnorm={_loudnorm_target()}"
+    return (f"{norm},afade=t=in:st=0:d=0.03,afade=t=out:st={fade_out_at:.3f}:d=0.05")
 
 
 def _fontsdir(clip_dir: Path) -> str:
@@ -112,7 +168,7 @@ def render_clip(src: Path, start: float, duration: float, plan: CropPlan | None,
     cmd = [tools.ffmpeg_bin(), "-y", "-v", "error",
            "-ss", f"{start:.3f}", "-i", str(src), "-t", f"{duration:.3f}",
            "-filter_complex", chain, "-map", "[v]", "-map", "0:a?",
-           "-af", audio_filter(duration),
+           "-af", audio_filter(duration, measure_clip(src, start, duration, out.parent)),
            *_encode_args(preset_key, False, out_w, out_h, fps), out.name]
     _run_ffmpeg(cmd, out.parent, cancel, "рендер клипа")
     return verify(out, out_w, out_h, fps, expected=duration)
@@ -141,8 +197,9 @@ def render_segments(src: Path, segments: list[tuple[float, float]], plans: list[
     for p in parts:
         inputs += ["-i", str(p.resolve())]
     total = sum(e - s for s, e in segments)
+    measured = measure_parts(parts, work)
     fc = "".join(f"[{i}:v][{i}:a]" for i in range(n)) + f"concat=n={n}:v=1:a=1[cv][ca]"
-    fc += f";[ca]{audio_filter(total)}[a]"
+    fc += f";[ca]{audio_filter(total, measured)}[a]"
     if ass_file is not None:
         fc += f";[cv]ass={ass_file.name}{_fontsdir(out.parent)}[v]"
         vmap = "[v]"
