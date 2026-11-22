@@ -19,6 +19,7 @@
       <nav class="nav">
         <button class="nav-item active" data-view="home"><span data-icon="home"></span>Главная</button>
         <button class="nav-item" data-view="history"><span data-icon="clock"></span>История</button>
+        <button class="nav-item" data-view="live"><span data-icon="radio"></span>Нарезка Live</button>
         <button class="nav-item" data-view="settings"><span data-icon="gear"></span>Настройки</button>
         <button class="nav-item" data-view="about"><span data-icon="info"></span>О приложении</button>
       </nav>
@@ -325,6 +326,33 @@
       <section class="view" id="view-history">
         <header class="topbar"><div class="hero"><h1>История</h1><p class="sub">Все проекты: откройте, повторите или удалите</p></div></header>
         <div class="card glass" id="historyList"></div>
+      </section>
+
+      <!-- ============ НАРЕЗКА LIVE ============ -->
+      <section class="view" id="view-live">
+        <header class="topbar"><div class="hero"><h1>Нарезка Live</h1><p class="sub">Вставьте ссылку на эфир: приложение записывает его и нарезает окна по 5 минут с субтитрами</p></div></header>
+        <div class="card glass">
+          <div class="card-title"><span data-icon="radio"></span><span>Новый эфир</span></div>
+          <div class="field"><span>Ссылка на эфир</span>
+            <input class="input" id="liveUrl" placeholder="https://www.twitch.tv/имя_канала" spellcheck="false" autocomplete="off"></div>
+          <div class="settings-grid" style="margin-top:14px">
+            <label class="field"><span>Тип контента</span>
+              <select class="select" id="liveType">
+                <option value="general">Общий</option><option value="podcast">Подкаст</option>
+                <option value="game">Игра</option><option value="parts">Видео по частям</option>
+              </select></label>
+          </div>
+          <label class="switch-row" style="margin-top:14px">
+            <span>Есть права на эту трансляцию</span>
+            <input type="checkbox" class="switch" id="liveRights">
+          </label>
+          <button class="btn btn-primary btn-xl" id="liveStart"><span data-icon="play"></span>Начать запись и нарезку</button>
+          <p class="hint">Запись идёт, пока приложение открыто и эфир идёт. Окна попадают в «История» и обрабатываются так же, как загруженное видео.</p>
+        </div>
+        <div class="card glass" style="margin-top:16px">
+          <div class="card-title"><span>Записи</span></div>
+          <div id="liveList"><p class="hint">Записей пока нет.</p></div>
+        </div>
       </section>
 
       <!-- ============ НАСТРОЙКИ ============ -->

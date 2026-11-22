@@ -9,11 +9,11 @@ import tempfile
 import time
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import Body, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import clipedit, config, fonts, ingest, notify as notify_mod, pipeline, storage, tools, segments as sg
+from . import clipedit, config, fonts, ingest, live, notify as notify_mod, pipeline, storage, tools, segments as sg
 from .jobs import JobManager
 
 DEFAULT_SETTINGS = {"theme": "dark", "clip_count": 8, "clip_length": 30, "subtitle_style": config.DEFAULT_SUBTITLE_STYLE,
@@ -132,6 +132,19 @@ def _ranged_file(path: Path, request: Request, media: str) -> Response:
 def create_app(jobs: JobManager | None = None) -> FastAPI:
     app = FastAPI(title=config.APP_NAME, version=config.APP_VERSION)
     holder = {"jobs": jobs or JobManager()}
+
+    def _live_window(path: Path, label: str, content_type: str, options: dict) -> str:
+        """Окно эфира становится обычным проектом и уходит в очередь обработки."""
+        proj = storage.create_project(str(path), "file", content_type, options)
+        proj["title"] = label
+        dest = storage.project_dir(proj["id"]) / "source.mp4"
+        shutil.copy2(path, dest)
+        proj["source"] = str(dest)
+        storage.save_project(proj)
+        holder["jobs"].submit(proj["id"])
+        return proj["id"]
+
+    holder["live"] = live.LiveManager(live.live_root(), on_window=_live_window)
 
     @app.get("/api/fonts")
     def list_fonts():
@@ -620,6 +633,30 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
         except tools.ToolError as exc:
             raise HTTPException(409, str(exc))
         return FileResponse(out, media_type="application/zip", filename=f"{pid}_clips.zip")
+
+    @app.post("/api/live")
+    async def live_start(body: dict = Body(...)):
+        """Запись эфира по ссылке. Обязательно подтверждение прав: body.rights = true."""
+        if not body.get("rights"):
+            raise HTTPException(400, "Подтвердите, что у вас есть права на эту трансляцию")
+        ctype = _content_type(body.get("content_type"))
+        try:
+            session = holder["live"].start(str(body.get("url") or ""), ctype, _options(body))
+        except ValueError as exc:
+            raise HTTPException(400, str(exc))
+        return {"id": session.id}
+
+    @app.get("/api/live")
+    def live_list():
+        return {"sessions": holder["live"].all()}
+
+    @app.post("/api/live/{sid}/stop")
+    def live_stop(sid: str):
+        session = holder["live"].get(sid)
+        if session is None:
+            raise HTTPException(404, "Запись не найдена")
+        session.request_stop()
+        return {"ok": True}
 
     @app.post("/api/notify")
     async def notify(request: Request):

@@ -8,6 +8,7 @@
     "cloud-down": '<path d="M7 18a4.5 4.5 0 0 1-.5-9A6 6 0 0 1 18 9.5a4 4 0 0 1 .5 8H7z"/><path d="M12 11v6M9.5 14.5 12 17l2.5-2.5"/>',
     home: '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>',
     clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    radio: '<circle cx="12" cy="12" r="2"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4M7.8 16.2a6 6 0 0 1 0-8.4M19 5a10 10 0 0 1 0 14M5 19A10 10 0 0 1 5 5"/>',
     gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
     info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
     link: '<path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"/><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"/>',
@@ -136,7 +137,65 @@
     document.querySelectorAll(".nav-item").forEach((b) => b.classList.toggle("active", b.dataset.view === name));
     document.querySelectorAll(".view").forEach((v) => v.classList.toggle("active", v.id === "view-" + name));
     if (name === "history") loadHistory();
+    if (name === "live") { loadLive(); if (!liveTimer) liveTimer = setInterval(loadLive, 5000); }
+    else if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
   }
+
+  // ---------- Нарезка Live ----------
+  let liveTimer = null;
+  const LIVE_STATUS = { starting: "Подключение…", recording: "Идёт запись", stopping: "Останавливается…",
+    stopped: "Остановлено", ended: "Эфир закончился", error: "Ошибка" };
+  function liveRow(s) {
+    const row = document.createElement("div");
+    row.className = "live-row";
+    const head = document.createElement("div");
+    head.className = "live-head";
+    const url = document.createElement("span");
+    url.className = "live-url";
+    url.textContent = s.url;
+    const st = document.createElement("span");
+    st.className = "live-status live-" + s.status;
+    st.textContent = LIVE_STATUS[s.status] || s.status;
+    head.append(url, st);
+    const meta = document.createElement("div");
+    meta.className = "hint";
+    meta.textContent = `Окон обработано: ${s.windows}` + (s.error ? ` · ${s.error}` : "");
+    row.append(head, meta);
+    if (s.status === "starting" || s.status === "recording") {
+      const b = document.createElement("button");
+      b.className = "btn btn-ghost btn-sm";
+      b.textContent = "Остановить запись";
+      b.addEventListener("click", async () => {
+        try { await api(`/api/live/${s.id}/stop`, { method: "POST" }); loadLive(); }
+        catch (e) { toast(e.message, "err"); }
+      });
+      row.append(b);
+    }
+    return row;
+  }
+  async function loadLive() {
+    try {
+      const data = await api("/api/live");
+      const list = $("liveList");
+      list.replaceChildren();
+      if (!data.sessions.length) {
+        const p = document.createElement("p"); p.className = "hint"; p.textContent = "Записей пока нет.";
+        list.append(p);
+        return;
+      }
+      data.sessions.forEach((s) => list.append(liveRow(s)));
+    } catch (_) { /* сеть недоступна: оставим прежний список */ }
+  }
+  $("liveStart").addEventListener("click", async () => {
+    const url = $("liveUrl").value.trim();
+    if (!$("liveRights").checked) { toast("Подтвердите, что у вас есть права на эту трансляцию", "err"); return; }
+    if (!url) { toast("Вставьте ссылку на эфир", "err"); return; }
+    try {
+      await api("/api/live", { method: "POST", body: { url, rights: true, content_type: $("liveType").value } });
+      toast("Запись запущена", "ok");
+      loadLive();
+    } catch (e) { toast(e.message, "err"); }
+  });
   document.querySelectorAll(".nav-item").forEach((b) => b.addEventListener("click", () => showView(b.dataset.view)));
 
   // ---------- источник ----------
