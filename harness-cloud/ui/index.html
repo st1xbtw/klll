@@ -78,6 +78,7 @@
               <button class="chip" data-type="podcast"><span data-icon="mic"></span><span>Подкаст<br>/ разговор</span></button>
               <button class="chip" data-type="game"><span data-icon="gamepad"></span><span>Стрим / Игра</span></button>
               <button class="chip" data-type="general"><span data-icon="grid"></span><span>Общее</span></button>
+              <button class="chip" data-type="parts"><span data-icon="scissors"></span><span>Видео<br>по частям</span></button>
             </div>
             <p class="hint" id="typeHint"></p>
           </section>
@@ -100,15 +101,18 @@
                   <option value="bottom">Внизу</option><option value="center">По центру</option><option value="top">Вверху</option>
                 </select>
               </label>
-              <label class="field">Количество клипов
+              <label class="field" id="clipCountField">Количество клипов
                 <select id="clipCount" class="select">
                   <option value="5">5</option><option value="6">6</option><option value="7">7</option>
                   <option value="8" selected>8</option><option value="9">9</option><option value="10">10</option>
                 </select>
               </label>
               <label class="field">Длительность клипа
-                <select id="clipLen" class="select" disabled>
-                  <option value="30">30 сек</option>
+                <select id="clipLen" class="select">
+                  <option value="30" selected>30 сек</option><option value="45">45 сек</option>
+                  <option value="60">1 мин</option><option value="90">1 мин 30 сек</option>
+                  <option value="120">2 мин</option><option value="150">2 мин 30 сек</option>
+                  <option value="180">3 мин</option>
                 </select>
               </label>
             </div>

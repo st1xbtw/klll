@@ -24,6 +24,24 @@ def span(segments: list[list[float]]) -> tuple[float, float]:
     return segments[0][0], segments[-1][1]
 
 
+def split_parts(total: float, part_len: float, min_tail: float = CLIP_LEN) -> list[list[float]]:
+    """Режет видео подряд с начала на части по part_len секунд.
+
+    Хвост короче min_tail присоединяется к последней части, чтобы не появлялся огрызок.
+    Поэтому последняя часть может быть длиннее part_len на величину до min_tail.
+    """
+    if total < min_tail or part_len <= 0:
+        return []
+    n = int(total // part_len)
+    spans = [[round(i * part_len, 3), round((i + 1) * part_len, 3)] for i in range(n)]
+    tail_start = n * part_len
+    if total - tail_start >= min_tail or not spans:
+        spans.append([round(tail_start, 3), round(total, 3)])
+    else:
+        spans[-1][1] = round(total, 3)
+    return spans
+
+
 def custom_clip(start: float, src_duration: float) -> list[list[float]]:
     if start < 0 or start + CLIP_LEN > src_duration + EPS:
         raise SegmentError("Клип на 30 с не помещается в видео с этой точки")

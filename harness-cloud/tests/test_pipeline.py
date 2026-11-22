@@ -262,7 +262,7 @@ def client():
 def test_api_meta_and_settings(client):
     meta = client.get("/api/meta").json()
     assert meta["output"] == {"w": 1080, "h": 1920, "fps": 30}
-    assert set(meta["content_types"]) == {"podcast", "game", "general"}
+    assert set(meta["content_types"]) == {"podcast", "game", "general", "parts"}
     r = client.put("/api/settings", json={"theme": "light", "clip_count": 7})
     assert r.status_code == 200
     assert client.get("/api/settings").json()["theme"] == "light"

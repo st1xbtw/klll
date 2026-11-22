@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 APP_NAME = "Harness Cloud"
-APP_VERSION = "1.8.0"
+APP_VERSION = "1.9.0"
 
 # Выходной формат клипов (спецификация).
 OUT_W = 1080
@@ -85,7 +85,23 @@ CONTENT_TYPES = {
     "podcast": "Подкаст / разговор",
     "game": "Стрим / Игра",
     "general": "Общее",
+    "parts": "Видео по частям",
 }
+
+# Видео по частям: видео режется подряд с начала на части выбранной длины, без выбора лучших моментов.
+CLIP_LENS = (30, 45, 60, 90, 120, 150, 180)   # выбор длины клипа (сек) для всех типов контента
+DEFAULT_CLIP_LEN = 30
+PART_MIN = 30.0
+PART_MAX = 180.0
+
+
+def clamp_clip_len(value) -> float:
+    """Длина клипа или части в секундах: число из PART_MIN..PART_MAX, иначе значение по умолчанию."""
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        v = float(DEFAULT_CLIP_LEN)
+    return min(PART_MAX, max(PART_MIN, v))
 
 # Пресеты экспорта: битрейт видео и аудио.
 EXPORT_PRESETS = {

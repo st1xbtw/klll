@@ -103,7 +103,7 @@ def render_clip(src: Path, start: float, duration: float, plan: CropPlan | None,
            "-filter_complex", chain, "-map", "[v]", "-map", "0:a?",
            *_encode_args(preset_key, False, out_w, out_h, fps), out.name]
     _run_ffmpeg(cmd, out.parent, cancel, "рендер клипа")
-    return verify(out, out_w, out_h, fps)
+    return verify(out, out_w, out_h, fps, expected=duration)
 
 
 def render_segments(src: Path, segments: list[tuple[float, float]], plans: list[CropPlan | None],
@@ -145,11 +145,14 @@ def render_segments(src: Path, segments: list[tuple[float, float]], plans: list[
         work.rmdir()
     except OSError:
         pass
-    return verify(out, out_w, out_h, fps)
+    return verify(out, out_w, out_h, fps, expected=sum(e - s for s, e in segments))
 
 
 def verify(path: Path, out_w: int = config.OUT_W, out_h: int = config.OUT_H,
-           fps: int = config.DEFAULT_FPS) -> dict:
+           fps: int = config.DEFAULT_FPS, expected: float | None = None) -> dict:
+    """Проверяет готовый файл. expected — ожидаемая длина; по умолчанию CLIP_LEN (30 с)."""
+    want = config.CLIP_LEN if expected is None else expected
+    tol = config.CLIP_TOL + want * 0.005   # для частей до 3 минут допуск растёт с длиной
     info = tools.probe(path)
     return {
         "width": info["width"], "height": info["height"],
@@ -157,7 +160,7 @@ def verify(path: Path, out_w: int = config.OUT_W, out_h: int = config.OUT_H,
         "has_audio": info["has_audio"], "has_video": info["has_video"],
         "ok": (info["width"], info["height"]) == (out_w, out_h)
               and abs(info["fps"] - fps) <= 0.5
-              and abs(info["duration"] - config.CLIP_LEN) <= config.CLIP_TOL
+              and abs(info["duration"] - want) <= tol
               and info["has_audio"],
     }
 

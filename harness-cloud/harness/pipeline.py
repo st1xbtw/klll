@@ -72,6 +72,35 @@ def _checkpoint(cancel: threading.Event) -> None:
         raise StepCancelled()
 
 
+def _clip_dict(proj: dict, rank: int, segs: list, pct, reason: str, parts, origin: str, feat: dict) -> dict:
+    """Запись клипа в проекте: одинаковая структура для автоклипов и частей."""
+    opts = proj["options"]
+    ctype = proj["content_type"]
+    start, end = segs[0][0], segs[-1][1]
+    return {
+        "index": rank, "start": start, "end": end,
+        "original_start": start, "original_end": end,
+        "segments": [[float(a), float(b)] for a, b in segs], "origin": origin,
+        "framing": opts.get("framing", "face"),
+        "aspect": opts.get("aspect", config.DEFAULT_ASPECT),
+        "quality": opts.get("quality", config.DEFAULT_QUALITY),
+        "fps": opts.get("fps", config.DEFAULT_FPS),
+        "sub_box": bool(opts.get("sub_box")),
+        "sub_emoji": bool(opts.get("sub_emoji")),
+        "sub_anim": bool(opts.get("sub_anim")),
+        "show_hook": bool(opts.get("show_hook", ctype != "game")),
+        "sub_place": opts.get("sub_place", config.DEFAULT_SUB_PLACE),
+        "duration": sg.total(segs), "score": pct,
+        "parts": {k: round(v, 3) for k, v in (parts or {}).items()},
+        "reason": reason, "text": "", "hook": "", "hook_source": "",
+        "description": "", "hashtags": [], "status": "queued", "error": None,
+        "file": None, "thumb": None, "verify": None,
+        "subtitles": opts.get("subtitles", ctype != "game"),
+        "style": opts.get("subtitle_style", config.DEFAULT_SUBTITLE_STYLE),
+        "timeline": [round(float(x), 3) for x in feat["loud"][::2]],
+    }
+
+
 def run(pid: str, cancel: threading.Event, retry: bool = False) -> dict:
     proj = storage.load_project(pid)
     rep = Reporter(proj)
@@ -147,44 +176,32 @@ def run(pid: str, cancel: threading.Event, retry: bool = False) -> dict:
             samples = audio.read_samples(wav)
             ctype = proj["content_type"]
             feat = scoring.build_features(samples, words, ctype, info["duration"])
-            cands = scoring.score_windows(feat, config.CLIP_LEN, ctype)
-            if not cands:
-                raise ToolError("Видео короче 30 секунд — клипы не из чего собрать")
-            count = int(proj["options"].get("clip_count", 8))
-            count = max(config.MIN_CLIPS, min(config.MAX_CLIPS, count))
-            chosen = scoring.select_clips(cands, feat, count, config.CLIP_LEN, ctype, words)
-            if len(chosen) < config.MIN_CLIPS:
-                raise ToolError(f"Найдено непересекающихся окон по 30 с: {len(chosen)}, нужно минимум "
-                                f"{config.MIN_CLIPS}. Видео слишком короткое или речи слишком мало.")
-            if len(chosen) < count:
-                proj["warnings"].append(f"Запрошено {count} клипов, найдено {len(chosen)} непересекающихся.")
-            scores = [c.score for c in chosen]
-            lo, hi = min(scores), max(scores)
-            clips = []
-            for rank, c in enumerate(chosen, start=1):
-                pct = 99 if hi - lo < 1e-9 else int(round(78 + 21 * (c.score - lo) / (hi - lo)))
-                clips.append({
-                    "index": rank, "start": c.start, "end": c.end,
-                    "original_start": c.start, "original_end": c.end,
-                    "segments": [[c.start, c.end]], "origin": "auto",
-                    "framing": proj["options"].get("framing", "face"),
-                    "aspect": proj["options"].get("aspect", config.DEFAULT_ASPECT),
-                    "quality": proj["options"].get("quality", config.DEFAULT_QUALITY),
-                    "fps": proj["options"].get("fps", config.DEFAULT_FPS),
-                    "sub_box": bool(proj["options"].get("sub_box")),
-                    "sub_emoji": bool(proj["options"].get("sub_emoji")),
-                    "sub_anim": bool(proj["options"].get("sub_anim")),
-                    "show_hook": bool(proj["options"].get("show_hook", proj["content_type"] != "game")),
-                    "sub_place": proj["options"].get("sub_place", config.DEFAULT_SUB_PLACE),
-                    "duration": config.CLIP_LEN, "score": pct,
-                    "parts": {k: round(v, 3) for k, v in c.parts.items()},
-                    "reason": c.reason, "text": "", "hook": "", "hook_source": "",
-                    "description": "", "hashtags": [], "status": "queued", "error": None,
-                    "file": None, "thumb": None, "verify": None,
-                    "subtitles": proj["options"].get("subtitles", ctype != "game"),
-                    "style": proj["options"].get("subtitle_style", config.DEFAULT_SUBTITLE_STYLE),
-                    "timeline": [round(float(x), 3) for x in feat["loud"][::2]],
-                })
+            clip_len = config.clamp_clip_len(proj["options"].get("clip_len"))
+            if ctype == "parts":
+                # Видео по частям: нарезка подряд с начала, без выбора лучших моментов.
+                spans = sg.split_parts(info["duration"], clip_len)
+                if not spans:
+                    raise ToolError("Видео короче 30 секунд — на части не из чего резать")
+                clips = [_clip_dict(proj, rank, [span], None, f"Часть {rank} из {len(spans)}", None, "parts", feat)
+                         for rank, span in enumerate(spans, start=1)]
+            else:
+                cands = scoring.score_windows(feat, clip_len, ctype)
+                if not cands:
+                    raise ToolError(f"Видео короче {clip_len:.0f} секунд — клипы не из чего собрать")
+                count = int(proj["options"].get("clip_count", 8))
+                count = max(config.MIN_CLIPS, min(config.MAX_CLIPS, count))
+                chosen = scoring.select_clips(cands, feat, count, clip_len, ctype, words)
+                if len(chosen) < config.MIN_CLIPS:
+                    raise ToolError(f"Найдено непересекающихся окон по {clip_len:.0f} с: {len(chosen)}, нужно минимум "
+                                    f"{config.MIN_CLIPS}. Видео слишком короткое или речи слишком мало.")
+                if len(chosen) < count:
+                    proj["warnings"].append(f"Запрошено {count} клипов, найдено {len(chosen)} непересекающихся.")
+                scores = [c.score for c in chosen]
+                lo, hi = min(scores), max(scores)
+                clips = []
+                for rank, c in enumerate(chosen, start=1):
+                    pct = 99 if hi - lo < 1e-9 else int(round(78 + 21 * (c.score - lo) / (hi - lo)))
+                    clips.append(_clip_dict(proj, rank, [[c.start, c.end]], pct, c.reason, c.parts, "auto", feat))
             proj["clips"] = clips
             proj["timeline_seconds"] = feat["n"]
             done.add("analyze")

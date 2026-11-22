@@ -94,6 +94,7 @@ def _options(payload: dict) -> dict:
         "sub_box": _flag(payload.get("sub_box")),
         "sub_emoji": _flag(payload.get("sub_emoji")),
         "sub_anim": _flag(payload.get("sub_anim")),
+        "clip_len": config.clamp_clip_len(payload.get("clip_len")),
         "show_hook": _flag(payload["show_hook"]) if "show_hook" in payload else True,
         "sub_place": payload.get("sub_place") if payload.get("sub_place") in config.SUB_PLACES
         else config.DEFAULT_SUB_PLACE,
@@ -242,7 +243,7 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
                      sub_emoji: str = Form("0"), sub_anim: str = Form("0"),
                      aspect: str = Form("9:16"), quality: str = Form("1080p"), fps: int = Form(30),
                      subtitles: str = Form("1"), show_hook: str = Form("1"),
-                     sub_place: str = Form("bottom"),
+                     sub_place: str = Form("bottom"), clip_len: float = Form(config.DEFAULT_CLIP_LEN),
                      watermark: str = Form(""), sub_font: str = Form(""), sub_effect: str = Form("none")):
         ctype = _content_type(content_type)
         suffix = Path(file.filename or "video.mp4").suffix.lower()
@@ -260,6 +261,7 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
                 "framing": framing, "sub_box": sub_box, "sub_emoji": sub_emoji, "sub_anim": sub_anim,
                 "aspect": aspect, "quality": quality, "fps": fps,
                 "subtitles": subtitles, "show_hook": show_hook, "sub_place": sub_place,
+                "clip_len": clip_len,
                 "watermark": watermark, "sub_font": sub_font, "sub_effect": sub_effect}))
             # Оригинал переносим в папку проекта, исходник не трогаем.
             dest = storage.project_dir(proj["id"]) / ("source" + suffix)
@@ -369,7 +371,7 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
         if clip is None:
             raise HTTPException(404, "Клип не найден")
         new_start = clip["original_start"] + shift_s
-        new_end = new_start + config.CLIP_LEN
+        new_end = new_start + float(clip.get("duration") or config.CLIP_LEN)
         if new_start < 0 or new_end > proj.get("duration", 0):
             raise HTTPException(400, "Сдвиг выходит за пределы видео")
         if len(clip.get("segments") or []) > 1:
@@ -553,13 +555,14 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
                             filename=f"clip_{idx:02d}.mp4")
 
     @app.get("/api/estimate")
-    def estimate(count: int = 5, quality: str = "1080p", fps: int = 30, aspect: str = "9:16"):
+    def estimate(count: int = 5, quality: str = "1080p", fps: int = 30, aspect: str = "9:16",
+                 clip_len: float = config.DEFAULT_CLIP_LEN):
         """Оценка времени рендера клипов по выбранным качеству, частоте кадров и формату."""
         q = quality if quality in config.QUALITIES else config.DEFAULT_QUALITY
         f = config.parse_fps(fps) or config.DEFAULT_FPS
         a = aspect if aspect in config.ASPECTS else config.DEFAULT_ASPECT
         cnt = max(config.MIN_CLIPS, min(config.MAX_CLIPS, int(count)))
-        sec = config.estimate_seconds(cnt, q, f, a, config.CLIP_LEN, config.render_workers(),
+        sec = config.estimate_seconds(cnt, q, f, a, config.clamp_clip_len(clip_len), config.render_workers(),
                                       pipeline.render_speed())
         w, h = config.out_size(a, q)
         return {"seconds": round(sec), "clips": cnt, "width": w, "height": h, "fps": f,

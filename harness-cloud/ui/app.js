@@ -14,6 +14,7 @@
     x: '<path d="M6 6l12 12M18 6L6 18"/>',
     type: '<path d="M4 6h16M4 12h16M4 18h10"/>',
     mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
+    scissors: '<circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><path d="M8 7.5 20 17M8 16.5 20 7"/>',
     gamepad: '<path d="M7 16a3 3 0 0 1-3-3v-2a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v2a3 3 0 0 1-3 3 2.5 2.5 0 0 1-2-1l-1-1h-2l-1 1a2.5 2.5 0 0 1-2 1z"/><path d="M6 10h4M8 8v4M15 11h.01M17 13h.01"/>',
     grid: '<rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/>',
     wand: '<path d="M4 20L16 8M14 6l4 4M18 3v3M16.5 4.5h3M20 13v2M19 14h2"/>',
@@ -172,9 +173,13 @@
   function setContentType(t) {
     state.contentType = t;
     document.querySelectorAll("#contentChips .chip").forEach((c) => c.classList.toggle("active", c.dataset.type === t));
+    const parts = t === "parts";
+    $("clipCountField").hidden = parts;
     $("typeHint").textContent = t === "game"
       ? "Режим «Стрим / Игра»: субтитры и хук не добавляются, клипы режутся по динамике и ключевым словам."
-      : "";
+      : parts
+        ? "Режим «Видео по частям»: видео режется подряд с самого начала на части выбранной длины (от 30 сек до 3 мин), без выбора лучших моментов. Количество клипов не нужно: частей столько, сколько получится."
+        : "";
   }
   document.querySelectorAll("#contentChips .chip").forEach((c) => c.addEventListener("click", () => setContentType(c.dataset.type)));
 
@@ -207,6 +212,7 @@
     fd.append("file", file);
     fd.append("content_type", state.contentType);
     fd.append("clip_count", $("clipCount").value);
+    fd.append("clip_len", $("clipLen").value);
     fd.append("subtitle_style", $("subStyle").value);
     fd.append("whisper_model", $("whisperModel").value);
     fd.append("export_preset", $("exportPreset").value);
@@ -239,6 +245,7 @@
       const r = await api("/api/projects", { method: "POST", body: {
         urls, content_type: state.contentType,
         clip_count: Number($("clipCount").value),
+        clip_len: Number($("clipLen").value),
         subtitle_style: $("subStyle").value,
         whisper_model: $("whisperModel").value,
         export_preset: $("exportPreset").value,
@@ -497,7 +504,7 @@
     const trim = $("trim");
     trim.disabled = !clip.file;
     trim.value = shift;
-    $("trimLbl").textContent = `${fmtTime(0)} — ${fmtTime(30)}` + (shift ? `  ·  сдвиг ${shift > 0 ? "+" : ""}${shift.toFixed(1)} с` : "");
+    $("trimLbl").textContent = `${fmtTime(0)} — ${fmtTime(clip.duration || 30)}` + (shift ? `  ·  сдвиг ${shift > 0 ? "+" : ""}${shift.toFixed(1)} с` : "");
     $("trimApply").disabled = !clip.file;
     $("trimReset").disabled = !clip.file;
     $("dlOne").disabled = !clip.file;
@@ -604,7 +611,7 @@
   // Ручная подрезка: сдвиг начала ±3 с, длина 30 с
   $("trim").addEventListener("input", (e) => {
     const v = Number(e.target.value);
-    $("trimLbl").textContent = `${fmtTime(0)} — ${fmtTime(30)}  ·  сдвиг ${v > 0 ? "+" : ""}${v.toFixed(1)} с`;
+    $("trimLbl").textContent = `${fmtTime(0)} — ${fmtTime(clip.duration || 30)}  ·  сдвиг ${v > 0 ? "+" : ""}${v.toFixed(1)} с`;
   });
   async function saveSubText(text) {
     const clip = selectedClip();
@@ -1036,7 +1043,7 @@
     const el = $("estimate");
     if (!el) return;
     const qs = new URLSearchParams({
-      count: $("clipCount").value, quality: $("quality").value,
+      count: $("clipCount").value, clip_len: $("clipLen").value, quality: $("quality").value,
       fps: $("fps").value, aspect: $("aspect").value,
     });
     try {
