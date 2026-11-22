@@ -27,6 +27,13 @@ STEP_LABELS = {
 }
 
 
+def step_label(proj: dict, step: str) -> str:
+    """Подпись шага. Для видео по частям шаг «analyze» — это нарезка, а не поиск моментов."""
+    if step == "analyze" and proj.get("content_type") == "parts":
+        return "Нарезка моментов"
+    return STEP_LABELS.get(step, step)
+
+
 class Reporter:
     """Все изменения проекта идут через этот класс под одной блокировкой (рендер параллельный)."""
 
@@ -36,7 +43,7 @@ class Reporter:
 
     def stage(self, step: str, frac: float = 0.0, text: str = "") -> None:
         with self.lock:
-            self.proj["stage"] = STEP_LABELS.get(step, step) + (f": {text}" if text else "")
+            self.proj["stage"] = step_label(self.proj, step) + (f": {text}" if text else "")
             self.proj["progress"] = round(frac, 3)
             storage.save_project(self.proj)
 
@@ -263,7 +270,7 @@ def run(pid: str, cancel: threading.Event, retry: bool = False) -> dict:
     except Exception as exc:
         proj["status"] = "error"
         proj["failed_step"] = step
-        proj["error"] = f"{STEP_LABELS.get(step, step)}: {exc}"
+        proj["error"] = f"{step_label(proj, step)}: {exc}"
         proj["trace"] = traceback.format_exc()[-1500:] if not isinstance(exc, ToolError) else None
         proj["stage"] = "Ошибка"
         proj["steps_done"] = sorted(done)

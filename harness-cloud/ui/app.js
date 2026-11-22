@@ -329,7 +329,9 @@
     const done = new Set(p.steps_done || []);
     const finished = p.status === "done";
     let activeSet = false;
-    $("procSteps").innerHTML = PROC_STEPS.map(([key, label]) => {
+    const partsMode = p.content_type === "parts";
+    $("procSteps").innerHTML = PROC_STEPS.map(([key, label0]) => {
+      const label = partsMode && key === "analyze" ? "Нарезка моментов" : label0;
       let cls = "";
       if (finished || done.has(key)) cls = "done";
       else if (live && !activeSet) { cls = "active"; activeSet = true; }
@@ -367,7 +369,8 @@
     $("statusLine").className = "status " + cls;
     let text;
     if (p.status === "done") text = `Готово! Найдено ${ready} клипов`;
-    else if (p.status === "error") text = "Ошибка на шаге: " + (STEP_NAMES[p.failed_step] || "—");
+    else if (p.status === "error") text = "Ошибка на шаге: " + (p.content_type === "parts" && p.failed_step === "analyze"
+      ? "нарезка частей" : (STEP_NAMES[p.failed_step] || "—"));
     else if (p.status === "cancelled") text = "Отменено";
     else if (p.status === "queued") text = "В очереди…";
     else text = p.stage || "Обработка…";
@@ -420,6 +423,7 @@
       let overlay = "";
       if (c.status === "processing") overlay = '<div class="clip-state"><div class="spinner"></div>Рендер…</div>';
       else if (c.status === "queued" && !done) overlay = '<div class="clip-state">В очереди</div>';
+      const isPart = c.origin === "parts";
       const score = c.score == null ? 0 : Math.round(c.score * 10) / 10;
       const scoreTxt = c.score == null ? "—" : score.toFixed(1);
       const dl = done
@@ -428,9 +432,11 @@
       return `
         <div class="clip-card ${c.index === state.selected ? "active" : ""} ${c.status === "processing" ? "processing" : ""} ${c.status === "queued" ? "queued" : ""}" data-idx="${c.index}" tabindex="0" role="button" aria-label="Клип ${c.index}">
           <span class="rank">${c.index}</span>
-          <div class="clip-thumb">${thumb}<span class="dur">0:30</span>${overlay}</div>
+          <div class="clip-thumb">${thumb}<span class="dur">${fmtTime(c.duration || 30)}</span>${overlay}</div>
           <div class="clip-info">
-            <div class="meter"><span class="meter-lbl">Сила момента</span><span class="meter-bar"><i style="width:${score}%"></i></span><span class="score">${scoreTxt}</span></div>
+            ${isPart
+            ? `<div class="meter"><span class="meter-lbl">Длительность части</span><span class="score">${fmtTime(c.duration || 0)}</span></div>`
+            : `<div class="meter"><span class="meter-lbl">Сила момента</span><span class="meter-bar"><i style="width:${score}%"></i></span><span class="score">${scoreTxt}</span></div>`}
             <div class="clip-title">${esc(clipTitle(c))}</div>
             ${c.hook ? `<div class="clip-hook">Хук: «${esc(c.hook)}»</div>` : ""}
             ${c.status === "error" ? `<div class="clip-err">${esc((c.error || "").slice(0, 120))}</div>` : ""}
@@ -473,6 +479,9 @@
     const [aw, ah] = (clip.aspect || "9:16").split(":");
     document.querySelector(".phone").style.aspectRatio = `${aw} / ${ah}`;
     updateSubHandle(clip);
+    $("timelineTitle").textContent = clip.origin === "parts"
+      ? "Громкость по времени · клик по шкале — точка для нового клипа"
+      : "Сила момента · клик по шкале — точка для нового клипа";
     if (state.subTextFor !== idx) {
       state.subTextFor = idx;
       $("subText").value = clip.text || "";
