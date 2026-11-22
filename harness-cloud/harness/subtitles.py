@@ -118,20 +118,42 @@ def _margin(out_h: int, px_at_1920: float) -> int:
     return max(20, round(out_h * px_at_1920 / 1920))
 
 
+NO_OVERLAP_GAP = 0.02  # с: зазор между репликами субтитров, чтобы они не пересекались
+
 PLACE_ALIGN = {"bottom": 2, "center": 5, "top": 8}   # ASS: 2 — низ по центру, 5 — середина, 8 — верх
 _TOP_MARGIN_PX = 260                                   # верхняя граница безопасной зоны
 
 
 def _tags(effect: str, x: float, y: float, align: int, out_h: int, hook: bool) -> str:
-    """Якорь (\\an), позиция и эффект одной реплики. Координаты — точка якоря в пикселях кадра."""
+    """Якорь (\\an), позиция и эффект одной реплики. Координаты — точка якоря в пикселях кадра.
+
+    Эффекты для субтитров: slide — выезд, fade — проявление, glow — свечение,
+    bounce — «пружина» (сжатие и перескок), rise — подъём снизу с проявлением,
+    zoom — приближение из меньшего размера, drop — падение с проявлением.
+    Для хука действуют только позиция и свечение: у него своя анимация \\fad."""
     parts = [f"\\an{align}"]
-    if effect == "slide" and not hook:
-        d = _margin(out_h, 80) * (-1 if align == 8 else 1)   # сверху выезжает сверху, снизу — снизу
+    sign = -1 if align == 8 else 1          # сверху выезжает сверху, снизу — снизу
+    if not hook and effect == "slide":
+        d = _margin(out_h, 80) * sign
         parts.append(f"\\move({x:.0f},{y + d:.0f},{x:.0f},{y:.0f},0,220)")
+    elif not hook and effect == "rise":
+        d = _margin(out_h, 60) * sign
+        parts.append(f"\\move({x:.0f},{y + d:.0f},{x:.0f},{y:.0f},0,240)")
+        parts.append("\\alpha&HFF&\\t(0,220,\\alpha&H00&)")
     else:
         parts.append(f"\\pos({x:.0f},{y:.0f})")
-    if effect == "fade" and not hook:
+    if not hook and effect == "fade":
         parts.append("\\fad(150,150)")
+    if not hook and effect == "bounce":
+        parts.append("\\fscx70\\fscy70\\t(0,130,\\fscx115\\fscy115)\\t(130,260,\\fscx100\\fscy100)")
+    if not hook and effect == "zoom":
+        # Приближение: слово появляется меньше, за 200 мс вырастает до полного размера.
+        parts.append("\\fscx60\\fscy60\\alpha&HFF&\\t(0,200,\\fscx100\\fscy100\\alpha&H00&)")
+    if not hook and effect == "drop":
+        # Падение: сверху вниз (для верхней строки — наоборот) с коротким проявлением.
+        d = _margin(out_h, 120) * -sign
+        parts.append(f"\\move({x:.0f},{y + d:.0f},{x:.0f},{y:.0f},0,260)")
+        parts.append("\\fad(120,0)")
     if effect == "glow":
         parts.append("\\blur2")
     return "{" + "".join(parts) + "}"
@@ -215,10 +237,13 @@ def build_ass(words: list[dict], clip_len: float, hook_text: str | None,
     lines = list(header)
 
     if has_subs:
-        for group in _group_words(words):
-            s = group[0]["s"]
+        groups = _group_words(words)
+        for i, group in enumerate(groups):
+            s = min(max(group[0]["s"], 0.0), clip_len)
+            # Конец реплики не может зайти на начало следующей: иначе две строки висят одна поверх другой.
             e = group[-1]["e"] + 0.15
-            s = min(max(s, 0.0), clip_len)
+            if i + 1 < len(groups):
+                e = min(e, groups[i + 1][0]["s"] - NO_OVERLAP_GAP)
             e = min(e, clip_len)
             if e <= s:
                 continue

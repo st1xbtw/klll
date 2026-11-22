@@ -162,4 +162,5 @@ def test_effects_list_survives_font_scan_failure(monkeypatch):
     monkeypatch.setattr(fonts, "list_fonts", broken)
     data = TestClient(server.create_app(jobs=_Jobs())).get("/api/fonts").json()
     assert data["fonts"] == []
-    assert set(data["effects"]) == {"none", "fade", "slide", "glow", "pop"}
+    from harness import config
+    assert set(data["effects"]) == set(config.SUB_EFFECTS)

@@ -82,6 +82,17 @@ def _encode_args(preset_key: str, fast: bool = False, out_w: int = config.OUT_W,
             "-movflags", "+faststart"]
 
 
+def audio_filter(total: float) -> str:
+    """Звук финального клипа: громкость к -14 LUFS (одним проходом) и короткие фейды на стыках.
+
+    Одним проходом loudnorm приближает громкость, но не точно; двухпроходной режим
+    (измерить, затем применить) даст точнее и запланирован отдельно.
+    """
+    fade_out_at = max(0.0, total - 0.05)
+    return (f"loudnorm=I={config.LOUDNESS_LUFS:g}:TP=-1.5:LRA=11,"
+            f"afade=t=in:st=0:d=0.03,afade=t=out:st={fade_out_at:.3f}:d=0.05")
+
+
 def _fontsdir(clip_dir: Path) -> str:
     """Опция fontsdir для фильтра ass: шрифты, скопированные в папку клипа (относительный путь)."""
     return ":fontsdir=fonts" if (clip_dir / "fonts").is_dir() else ""
@@ -101,6 +112,7 @@ def render_clip(src: Path, start: float, duration: float, plan: CropPlan | None,
     cmd = [tools.ffmpeg_bin(), "-y", "-v", "error",
            "-ss", f"{start:.3f}", "-i", str(src), "-t", f"{duration:.3f}",
            "-filter_complex", chain, "-map", "[v]", "-map", "0:a?",
+           "-af", audio_filter(duration),
            *_encode_args(preset_key, False, out_w, out_h, fps), out.name]
     _run_ffmpeg(cmd, out.parent, cancel, "рендер клипа")
     return verify(out, out_w, out_h, fps, expected=duration)
@@ -128,7 +140,9 @@ def render_segments(src: Path, segments: list[tuple[float, float]], plans: list[
     inputs: list[str] = []
     for p in parts:
         inputs += ["-i", str(p.resolve())]
+    total = sum(e - s for s, e in segments)
     fc = "".join(f"[{i}:v][{i}:a]" for i in range(n)) + f"concat=n={n}:v=1:a=1[cv][ca]"
+    fc += f";[ca]{audio_filter(total)}[a]"
     if ass_file is not None:
         fc += f";[cv]ass={ass_file.name}{_fontsdir(out.parent)}[v]"
         vmap = "[v]"
@@ -136,7 +150,7 @@ def render_segments(src: Path, segments: list[tuple[float, float]], plans: list[
         fc += ";[cv]null[v]"
         vmap = "[v]"
     cmd = [tools.ffmpeg_bin(), "-y", "-v", "error", *inputs,
-           "-filter_complex", fc, "-map", vmap, "-map", "[ca]",
+           "-filter_complex", fc, "-map", vmap, "-map", "[a]",
            *_encode_args(preset_key, False, out_w, out_h, fps), out.name]
     _run_ffmpeg(cmd, out.parent, cancel, "склейка клипа")
     for p in parts:

@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 APP_NAME = "Harness Cloud"
-APP_VERSION = "1.9.0"
+APP_VERSION = "2.0.0"
 
 # Выходной формат клипов (спецификация).
 OUT_W = 1080
@@ -75,6 +75,7 @@ DEFAULT_QUALITY = "1080p"
 FPS_MIN, FPS_MAX = 20, 120
 FPS_CHOICES = [20, 24, 25, 30, 48, 50, 60, 90, 120]
 DEFAULT_FPS = 30
+LOUDNESS_LUFS = -14     # целевая громкость звука клипа (стандарт платформ коротких видео)
 OUT_FPS = DEFAULT_FPS
 CLIP_LEN = 30.0          # секунд
 CLIP_TOL = 0.5           # допуск ± секунд
@@ -183,4 +184,6 @@ for _p in (DATA_DIR, PROJECTS_DIR, WHISPER_DIR):
 FONTS_DIR = BASE_DIR / "fonts"            # встроенные шрифты субтитров (OFL), см. fonts/LICENSES.txt
 USER_FONTS_DIR = DATA_DIR / "fonts"       # шрифты, загруженные пользователем
 SUB_EFFECTS = {"none": "Без эффекта", "fade": "Плавное появление", "slide": "Выезд снизу",
-               "glow": "Свечение", "pop": "Всплеск слов"}
+               "rise": "Подъём с проявлением", "bounce": "Пружина", "glow": "Свечение",
+               "zoom": "Приближение", "drop": "Падение",
+               "pop": "Всплеск слов"}
