@@ -1033,7 +1033,7 @@
     const nick = (s && s.nickname || "").replace(/^@/, "");
     let any = false;
     [["linkTelegram", s && s.social_telegram], ["linkTwitch", s && s.social_twitch],
-     ["linkYoutube", s && s.social_youtube]].forEach(([id, url]) => {
+     ["linkYoutube", s && s.social_youtube], ["linkTiktok", s && s.social_tiktok]].forEach(([id, url]) => {
       const a = $(id);
       const ok = /^https:\/\//.test(url || "");
       a.hidden = !ok;
@@ -1214,6 +1214,7 @@
     $("setTelegram").value = s.social_telegram || "";
     $("setTwitch").value = s.social_twitch || "";
     $("setYoutube").value = s.social_youtube || "";
+    $("setTiktok").value = s.social_tiktok || "";
     $("setEncoder").value = s.encoder || "auto";
   }
   async function saveSettings() {
@@ -1233,6 +1234,7 @@
       social_telegram: $("setTelegram").value.trim(),
       social_twitch: $("setTwitch").value.trim(),
       social_youtube: $("setYoutube").value.trim(),
+      social_tiktok: $("setTiktok").value.trim(),
       encoder: $("setEncoder").value,
     };
     try {

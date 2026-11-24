@@ -21,7 +21,7 @@ DEFAULT_SETTINGS = {"theme": "dark", "clip_count": 8, "clip_length": 30, "subtit
                     "quality": "1080p", "fps": 30, "save_min_score": 0,
                     "offline": False,
                     "encoder": "auto", "nickname": "", "social_twitch": "", "social_telegram": "",
-                    "social_youtube": ""}
+                    "social_youtube": "", "social_tiktok": ""}
 # Нативный выбор папки. Задаёт run.py при запуске окна pywebview; None — выбор недоступен (браузер).
 FOLDER_PICKER = None
 RANGE_RE = re.compile(r"bytes=(\d*)-(\d*)")
@@ -235,7 +235,7 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
             s["save_dir"] = _checked_dir(s["save_dir"])
         s["offline"] = bool(s.get("offline"))
         s["nickname"] = str(s.get("nickname") or "").strip().lstrip("@")[:40]
-        for key in ("social_twitch", "social_telegram", "social_youtube"):
+        for key in ("social_twitch", "social_telegram", "social_youtube", "social_tiktok"):
             url = str(s.get(key) or "").strip()[:200]
             s[key] = url if url.startswith("https://") or not url else ""
         s["encoder"] = s.get("encoder") if s.get("encoder") in ENCODER_CHOICES else "auto"

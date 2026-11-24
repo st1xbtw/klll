@@ -53,6 +53,7 @@ def test_settings_nickname_and_social_links_are_sanitized(client):
         "social_telegram": "https://t.me/mychannel",
         "social_twitch": "http://twitch.tv/insecure",
         "social_youtube": "javascript:alert(1)",
+        "social_tiktok": "https://www.tiktok.com/@mychannel",
         "encoder": "bogus",
     }
     saved = client.put("/api/settings", json=body).json()
@@ -60,6 +61,7 @@ def test_settings_nickname_and_social_links_are_sanitized(client):
     assert saved["social_telegram"] == "https://t.me/mychannel"
     assert saved["social_twitch"] == ""
     assert saved["social_youtube"] == ""
+    assert saved["social_tiktok"] == "https://www.tiktok.com/@mychannel"
     assert saved["encoder"] == "auto"
 
 
