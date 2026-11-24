@@ -214,6 +214,21 @@ def audio_filter(total: float, measured: dict | None = None, mutes: list | None 
     return (f"{prefix}{norm},afade=t=in:st=0:d=0.03,afade=t=out:st={fade_out_at:.3f}:d=0.05")
 
 
+BADGE_Y = {"top": "H*0.06", "center": "(H-h)/2", "bottom": "H-h-H*0.12"}
+
+
+def _badge_input(badge: Path | None, duration: float) -> list[str]:
+    """Значок как входной поток: одна картинка, которая повторяется ровно на длительность клипа."""
+    return ["-loop", "1", "-t", f"{duration:.3f}", "-i", str(badge)] if badge is not None else []
+
+
+def _badge_filter(src_label: str, badge_index: int, pos: str) -> tuple[str, str]:
+    """Накладывает значок по центру ширины, по высоте — по выбранному месту.
+    Возвращает фрагмент графа и метку результата."""
+    y = BADGE_Y.get(pos, BADGE_Y["top"])
+    return (f";[{badge_index}:v]format=rgba[bdg];{src_label}[bdg]overlay=x=(W-w)/2:y={y}[vb]", "[vb]")
+
+
 def _fontsdir(clip_dir: Path) -> str:
     """Опция fontsdir для фильтра ass: шрифты, скопированные в папку клипа (относительный путь)."""
     return ":fontsdir=fonts" if (clip_dir / "fonts").is_dir() else ""
@@ -224,18 +239,23 @@ def render_clip(src: Path, start: float, duration: float, plan: CropPlan | None,
                 framing: str = "face", src_w: int = 0, src_h: int = 0,
                 out_w: int = config.OUT_W, out_h: int = config.OUT_H, fps: int = config.DEFAULT_FPS,
                 layout: str = "game", corner: str = "br", size_pct: float = 25.0,
-                mutes: list | None = None, encoder: str = "cpu", bitrate: str | None = None) -> dict:
-    """Один непрерывный отрезок. ass_file кладётся рядом с out (cwd), поэтому путь короткий."""
+                mutes: list | None = None, encoder: str = "cpu", bitrate: str | None = None,
+                badge: Path | None = None, badge_pos: str = "top") -> dict:
+    """Один непрерывный отрезок. ass_file кладётся рядом с out (cwd), поэтому путь короткий.
+    badge — PNG со значками и ником (см. badge.py), накладывается под субтитрами."""
     out.parent.mkdir(parents=True, exist_ok=True)
     chain = _framing_chain(plan, framing, src_w, src_h, out_w, out_h, fps, layout, corner, size_pct)
+    extra, label = _badge_filter("[v0]", 1, badge_pos) if badge is not None else ("", "[v0]")
+    chain = chain[:-len("[v0]")] + "[v0]" + extra
     if ass_file is not None:
-        chain = chain[:-len("[v0]")] + f"[v0];[v0]ass={ass_file.name}{_fontsdir(out.parent)}[v]"
+        chain += f";{label}ass={ass_file.name}{_fontsdir(out.parent)}[v]"
     else:
-        chain = chain[:-len("[v0]")] + "[v0];[v0]null[v]"
+        chain += f";{label}null[v]"
     cmd = [tools.ffmpeg_bin(), "-y", "-v", "error",
-           "-ss", f"{start:.3f}", "-i", str(src), "-t", f"{duration:.3f}",
+           "-ss", f"{start:.3f}", "-i", str(src), *_badge_input(badge, duration),
            "-filter_complex", chain, "-map", "[v]", "-map", "0:a?",
            "-af", audio_filter(duration, measure_clip(src, start, duration, out.parent), mutes),
+           "-t", f"{duration:.3f}",
            *_encode_args(preset_key, False, out_w, out_h, fps, encoder, bitrate), out.name]
     _run_ffmpeg(cmd, out.parent, cancel, "рендер клипа")
     return verify(out, out_w, out_h, fps, expected=duration)
@@ -246,7 +266,8 @@ def render_segments(src: Path, segments: list[tuple[float, float]], plans: list[
                     preset_key: str, cancel: threading.Event,
                     out_w: int = config.OUT_W, out_h: int = config.OUT_H, fps: int = config.DEFAULT_FPS,
                     layout: str = "game", corner: str = "br", size_pct: float = 25.0,
-                    mutes: list | None = None, encoder: str = "cpu", bitrate: str | None = None) -> dict:
+                    mutes: list | None = None, encoder: str = "cpu", bitrate: str | None = None,
+                    badge: Path | None = None, badge_pos: str = "top") -> dict:
     """Несколько отрезков: каждый рендерится в промежуточный файл, затем склейка и субтитры."""
     work = out.parent / "parts"
     work.mkdir(parents=True, exist_ok=True)
@@ -270,13 +291,14 @@ def render_segments(src: Path, segments: list[tuple[float, float]], plans: list[
     measured = measure_parts(parts, work)
     fc = "".join(f"[{i}:v][{i}:a]" for i in range(n)) + f"concat=n={n}:v=1:a=1[cv][ca]"
     fc += f";[ca]{audio_filter(total, measured, mutes)}[a]"
+    extra, label = _badge_filter("[cv]", n, badge_pos) if badge is not None else ("", "[cv]")
+    fc += extra
     if ass_file is not None:
-        fc += f";[cv]ass={ass_file.name}{_fontsdir(out.parent)}[v]"
-        vmap = "[v]"
+        fc += f";{label}ass={ass_file.name}{_fontsdir(out.parent)}[v]"
     else:
-        fc += ";[cv]null[v]"
-        vmap = "[v]"
-    cmd = [tools.ffmpeg_bin(), "-y", "-v", "error", *inputs,
+        fc += f";{label}null[v]"
+    vmap = "[v]"
+    cmd = [tools.ffmpeg_bin(), "-y", "-v", "error", *inputs, *_badge_input(badge, total),
            "-filter_complex", fc, "-map", vmap, "-map", "[a]",
            *_encode_args(preset_key, False, out_w, out_h, fps, encoder, bitrate), out.name]
     _run_ffmpeg(cmd, out.parent, cancel, "склейка клипа")

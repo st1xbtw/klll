@@ -78,7 +78,9 @@ def _flag(value) -> bool:
 
 LAYOUTS = ("game", "webcam_bottom", "webcam_top", "random")
 EDIT_KEYS = ("layout", "webcam_corner", "webcam_size", "censor", "sub_group", "encoder", "bitrate",
-             "end_card", "end_text")
+             "end_card", "end_text", "social_badge", "social_pos")
+SOCIAL_POS = ("top", "center", "bottom")
+SOCIAL_KEYS = ("telegram", "twitch", "youtube", "tiktok")
 ENCODER_CHOICES = ("auto", "cpu", "nvenc", "qsv", "amf")
 BITRATES = ("auto", "6M", "8M", "12M", "16M")
 
@@ -124,7 +126,20 @@ def _options(payload: dict) -> dict:
         "end_card": _flag(payload.get("end_card")),
         "end_text": str(payload.get("end_text") or "Подпишись").strip()[:40] or "Подпишись",
         "nickname": str(s.get("nickname") or "").strip()[:40],
+        "social_badge": _flag(payload.get("social_badge")),
+        "social_pos": payload.get("social_pos") if payload.get("social_pos") in SOCIAL_POS else "top",
+        "socials": _socials(s),
     }
+
+
+def _socials(s: dict) -> dict:
+    """Ссылки площадок из настроек, только https. Значки в кадре берутся отсюда."""
+    out = {}
+    for k in SOCIAL_KEYS:
+        url = str(s.get(f"social_{k}") or "")
+        if url.startswith("https://"):
+            out[k] = url
+    return out
 
 
 def _content_type(value: str | None) -> str:
@@ -302,7 +317,8 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
                      layout: str = Form("game"), webcam_corner: str = Form("br"),
                      webcam_size: float = Form(25), censor: str = Form("0"), sub_group: int = Form(0),
                      encoder: str = Form("auto"), bitrate: str = Form("auto"),
-                     end_card: str = Form("0"), end_text: str = Form("Подпишись")):
+                     end_card: str = Form("0"), end_text: str = Form("Подпишись"),
+                     social_badge: str = Form("0"), social_pos: str = Form("top")):
         ctype = _content_type(content_type)
         suffix = Path(file.filename or "video.mp4").suffix.lower()
         if suffix not in ingest.VIDEO_EXT:
@@ -323,7 +339,8 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
                 "watermark": watermark, "sub_font": sub_font, "sub_effect": sub_effect,
                 "layout": layout, "webcam_corner": webcam_corner, "webcam_size": webcam_size,
                 "censor": censor, "sub_group": sub_group, "encoder": encoder, "bitrate": bitrate,
-                "end_card": end_card, "end_text": end_text}))
+                "end_card": end_card, "end_text": end_text,
+                "social_badge": social_badge, "social_pos": social_pos}))
             # Оригинал переносим в папку проекта, исходник не трогаем.
             dest = storage.project_dir(proj["id"]) / ("source" + suffix)
             shutil.copy2(tmp_file, dest)

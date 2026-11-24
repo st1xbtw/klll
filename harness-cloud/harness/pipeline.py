@@ -14,7 +14,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import audio, censor, config, encoders, faces, fonts, ingest, render, scoring, segments as sg, storage, subtitles, text_ai, tools, transcribe
+from . import audio, badge as badge_mod, censor, config, encoders, faces, fonts, ingest, render, scoring, segments as sg, storage, subtitles, text_ai, tools, transcribe
 from .tools import StepCancelled, ToolError
 
 STEPS = ["source", "audio", "transcribe", "analyze", "clips"]
@@ -111,6 +111,9 @@ def _clip_dict(proj: dict, rank: int, segs: list, pct, reason: str, parts, origi
         "sub_group": int(opts.get("sub_group") or 0), "encoder": opts.get("encoder", "auto"),
         "bitrate": opts.get("bitrate", "auto"), "end_card": bool(opts.get("end_card")),
         "end_text": opts.get("end_text", ""), "nickname": opts.get("nickname", ""),
+        # Ник и значки площадок в кадре (как субтитры).
+        "social_badge": bool(opts.get("social_badge")), "social_pos": opts.get("social_pos", "top"),
+        "socials": opts.get("socials") or {},
     }
 
 
@@ -360,10 +363,15 @@ def _render_one(proj: dict, clip: dict, src: Path, d: Path, words, segments, pre
             place=clip.get("sub_place") or config.DEFAULT_SUB_PLACE,
             group_size=int(clip.get("sub_group") or 0))
     out = cdir / "clip.mp4"
+    badge = None
+    if clip.get("social_badge"):
+        badge = badge_mod.make_badge(cdir / "badge.png", clip.get("nickname", ""),
+                                     clip.get("socials") or {}, out_w)
     opts_render = dict(out_w=out_w, out_h=out_h, fps=fps, layout=layout,
                        corner=clip.get("webcam_corner") or "br",
                        size_pct=float(clip.get("webcam_size") or 25), mutes=mutes,
-                       encoder=encoder, bitrate=bitrate)
+                       encoder=encoder, bitrate=bitrate,
+                       badge=badge, badge_pos=clip.get("social_pos") or "top")
     if len(segs) == 1:
         t0 = time.time()
         res = render.render_clip(src, start, dur, plans[0], ass, out, preset, cancel,

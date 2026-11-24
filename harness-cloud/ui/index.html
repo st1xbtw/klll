@@ -27,7 +27,7 @@
         <div class="social-nick" id="socialNick"></div>
         <div class="social-links">
           <a class="social-link" id="linkTelegram" href="#" target="_blank" rel="noopener" title="Telegram" hidden>
-            <img src="icons/telegram.svg" alt="Telegram">
+            <img src="icons/telegram.png" alt="Telegram">
           </a>
           <a class="social-link" id="linkTwitch" href="#" target="_blank" rel="noopener" title="Twitch" hidden>
             <img src="icons/twitch.png" alt="Twitch">
@@ -226,6 +226,7 @@
                     <div class="sp-zone sp-game" id="spGame">Игра</div>
                     <div class="sp-zone sp-cam" id="spCam" hidden>Вебка</div>
                     <div class="sp-text" id="spText"></div>
+                    <div class="sp-badge" id="spBadge" hidden></div>
                   </div>
                   <p class="hint" id="spHint">Предпросмотр субтитров: цвета и место из выбранного стиля</p>
                 </div>
@@ -262,6 +263,14 @@
                 <label class="switch-row"><span>Заглушить и скрыть мат (звук и буквы)</span><input type="checkbox" id="censor" class="switch"></label>
                 <label class="switch-row"><span>Концовка 3 с с призывом подписаться</span><input type="checkbox" id="endCard" class="switch"></label>
                 <input id="endText" class="input input-sm" maxlength="40" placeholder="Подпишись" autocomplete="off">
+                <label class="switch-row"><span>Ник и значки площадок в кадре</span><input type="checkbox" id="socialBadge" class="switch"></label>
+                <label class="field-sm">Место значков
+                  <select id="socialPos" class="select select-sm">
+                    <option value="top">Вверху</option>
+                    <option value="center">По центру</option>
+                    <option value="bottom">Внизу</option>
+                  </select>
+                </label>
               </div>
             </div>
             <button class="btn btn-primary btn-xl" id="startBtn"><span data-icon="wand"></span>Начать обработку<span data-icon="chev-r"></span></button>

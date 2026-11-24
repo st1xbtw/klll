@@ -939,6 +939,8 @@
       bitrate: $("bitrate").value,
       end_card: $("endCard").checked,
       end_text: $("endText").value.trim() || "Подпишись",
+      social_badge: $("socialBadge").checked,
+      social_pos: $("socialPos").value,
     };
   }
   function setLayout(value, notify) {
@@ -975,6 +977,14 @@
     restyle({ end_card: $("endCard").checked }, "Перерендер клипов: концовка"));
   $("endText").addEventListener("change", () =>
     restyle({ end_text: $("endText").value.trim() || "Подпишись" }, "Перерендер клипов: текст концовки"));
+  $("socialBadge").addEventListener("change", () => {
+    renderSubPreview();
+    restyle({ social_badge: $("socialBadge").checked }, "Перерендер клипов: ник и значки в кадре");
+  });
+  $("socialPos").addEventListener("change", () => {
+    renderSubPreview();
+    restyle({ social_pos: $("socialPos").value }, "Перерендер клипов: место значков");
+  });
   $("subStyle").addEventListener("change", renderSubPreview);
   $("subPlace").addEventListener("change", renderSubPreview);
 
@@ -1014,6 +1024,12 @@
       idx += 1;
       return `<span${cls}>${w}</span>`;
     }).join(" ")}</div>`).join("");
+    // Значок в кадре: точки вместо значков площадок и ник из настроек.
+    const badge = $("spBadge");
+    const nick = (state.settings && state.settings.nickname) || "ник";
+    badge.hidden = !$("socialBadge").checked;
+    badge.className = `sp-badge ${$("socialPos").value || "top"}`;
+    badge.textContent = `● ● ● ● ${nick}`;
   }
 
   // Видеокарты: что найдено на этой машине. Показывается на главной и в настройках.
@@ -1158,6 +1174,8 @@
     $("bitrate").value = o.bitrate || "auto";
     $("endCard").checked = !!o.end_card;
     $("endText").value = o.end_text || "Подпишись";
+    $("socialBadge").checked = !!o.social_badge;
+    $("socialPos").value = o.social_pos || "top";
     renderSubPreview();
   }
 
