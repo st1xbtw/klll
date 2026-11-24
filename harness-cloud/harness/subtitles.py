@@ -58,14 +58,18 @@ def _wrap_words(text: str, max_chars: int) -> list[str]:
     return out
 
 
-def _group_words(words: list[dict]) -> list[list[dict]]:
+def _group_words(words: list[dict], max_words: int = 0) -> list[list[dict]]:
+    """Группы слов для строк субтитров. max_words > 0 — ровно столько слов в строке (1–4)."""
     groups: list[list[dict]] = []
     cur: list[dict] = []
     cur_len = 0
     for w in words:
         if cur:
             span = w["e"] - cur[0]["s"]
-            if span > MAX_GROUP_SECONDS or cur_len + len(w["w"]) + 1 > MAX_LINE_CHARS * 2:
+            if max_words and len(cur) >= max_words:
+                groups.append(cur)
+                cur, cur_len = [], 0
+            elif span > MAX_GROUP_SECONDS or cur_len + len(w["w"]) + 1 > MAX_LINE_CHARS * 2:
                 groups.append(cur)
                 cur, cur_len = [], 0
         cur.append(w)
@@ -186,7 +190,7 @@ def build_ass(words: list[dict], clip_len: float, hook_text: str | None,
               style_key: str, out: Path, subtitles: bool = True, box: bool = False,
               anim: bool = False, emoji: bool = False,
               out_w: int = config.OUT_W, out_h: int = config.OUT_H,
-              watermark: str | None = None, font: str | None = None,
+              watermark: str | None = None, font: str | None = None, group_size: int = 0,
               pos: tuple[float, float] | None = None, effect: str = "none",
               place: str = config.DEFAULT_SUB_PLACE) -> Path:
     """Строит ASS-файл субтитров, хука и водяного знака.
@@ -237,7 +241,7 @@ def build_ass(words: list[dict], clip_len: float, hook_text: str | None,
     lines = list(header)
 
     if has_subs:
-        groups = _group_words(words)
+        groups = _group_words(words, group_size)
         for i, group in enumerate(groups):
             s = min(max(group[0]["s"], 0.0), clip_len)
             # Конец реплики не может зайти на начало следующей: иначе две строки висят одна поверх другой.

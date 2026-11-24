@@ -13,13 +13,15 @@ from fastapi import Body, FastAPI, File, Form, HTTPException, Request, UploadFil
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import clipedit, config, fonts, ingest, live, notify as notify_mod, pipeline, storage, tools, segments as sg
+from . import clipedit, config, encoders, fonts, ingest, live, notify as notify_mod, pipeline, render, storage, tools, segments as sg
 from .jobs import JobManager
 
 DEFAULT_SETTINGS = {"theme": "dark", "clip_count": 8, "clip_length": 30, "subtitle_style": config.DEFAULT_SUBTITLE_STYLE,
                     "whisper_model": "base", "export_preset": "tiktok", "notify": True, "save_dir": "",
                     "quality": "1080p", "fps": 30, "save_min_score": 0,
-                    "offline": False}
+                    "offline": False,
+                    "encoder": "auto", "nickname": "", "social_twitch": "", "social_telegram": "",
+                    "social_youtube": ""}
 # Нативный выбор папки. Задаёт run.py при запуске окна pywebview; None — выбор недоступен (браузер).
 FOLDER_PICKER = None
 RANGE_RE = re.compile(r"bytes=(\d*)-(\d*)")
@@ -74,6 +76,20 @@ def _flag(value) -> bool:
     return bool(value)
 
 
+LAYOUTS = ("game", "webcam_bottom", "webcam_top", "random")
+EDIT_KEYS = ("layout", "webcam_corner", "webcam_size", "censor", "sub_group", "encoder", "bitrate",
+             "end_card", "end_text")
+ENCODER_CHOICES = ("auto", "cpu", "nvenc", "qsv", "amf")
+BITRATES = ("auto", "6M", "8M", "12M", "16M")
+
+
+def _clamp_num(value, lo: float, hi: float, default: float) -> float:
+    try:
+        return max(lo, min(hi, float(value)))
+    except (TypeError, ValueError):
+        return default
+
+
 def _options(payload: dict) -> dict:
     s = _read_settings()
     cnt = int(payload.get("clip_count") or s["clip_count"])
@@ -98,6 +114,16 @@ def _options(payload: dict) -> dict:
         "show_hook": _flag(payload["show_hook"]) if "show_hook" in payload else True,
         "sub_place": payload.get("sub_place") if payload.get("sub_place") in config.SUB_PLACES
         else config.DEFAULT_SUB_PLACE,
+        "layout": payload.get("layout") if payload.get("layout") in LAYOUTS else "game",
+        "webcam_corner": payload.get("webcam_corner") if payload.get("webcam_corner") in render.WEBCAM_CORNERS else "br",
+        "webcam_size": _clamp_num(payload.get("webcam_size"), 12, 50, 25),
+        "censor": _flag(payload.get("censor")),
+        "sub_group": int(_clamp_num(payload.get("sub_group"), 0, 4, 0)),
+        "encoder": payload.get("encoder") if payload.get("encoder") in ENCODER_CHOICES else (s.get("encoder") or "auto"),
+        "bitrate": payload.get("bitrate") if payload.get("bitrate") in BITRATES else "auto",
+        "end_card": _flag(payload.get("end_card")),
+        "end_text": str(payload.get("end_text") or "Подпишись").strip()[:40] or "Подпишись",
+        "nickname": str(s.get("nickname") or "").strip()[:40],
     }
 
 
@@ -179,6 +205,11 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
         return {"name": config.APP_NAME, "version": config.APP_VERSION,
                 "content_types": config.CONTENT_TYPES, "presets": config.EXPORT_PRESETS,
                 "subtitle_styles": {k: v["label"] for k, v in config.SUBTITLE_STYLES.items()},
+                "subtitle_colors": {k: {"highlight": v["highlight"], "base": v["base"],
+                                        "outline": v["outline"], "pop": v["pop"]}
+                                    for k, v in config.SUBTITLE_STYLES.items()},
+                "sub_places": config.SUB_PLACES,
+                "layouts": list(LAYOUTS), "encoder_choices": list(ENCODER_CHOICES),
                 "whisper_models": list(transcribe_models()), "ffmpeg": ffmpeg,
                 "clip": {"count_min": config.MIN_CLIPS, "count_max": config.MAX_CLIPS,
                          "length": config.CLIP_LEN, "tolerance": config.CLIP_TOL},
@@ -191,6 +222,11 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
     def get_settings():
         return _read_settings()
 
+    @app.get("/api/encoders")
+    def get_encoders():
+        """Какие кодировщики доступны на этой машине (видеокарты проверяются пробным запуском)."""
+        return encoders.status()
+
     @app.put("/api/settings")
     async def put_settings(request: Request):
         body = await request.json()
@@ -198,6 +234,11 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
         if "save_dir" in s:
             s["save_dir"] = _checked_dir(s["save_dir"])
         s["offline"] = bool(s.get("offline"))
+        s["nickname"] = str(s.get("nickname") or "").strip().lstrip("@")[:40]
+        for key in ("social_twitch", "social_telegram", "social_youtube"):
+            url = str(s.get(key) or "").strip()[:200]
+            s[key] = url if url.startswith("https://") or not url else ""
+        s["encoder"] = s.get("encoder") if s.get("encoder") in ENCODER_CHOICES else "auto"
         if s.get("quality") not in config.QUALITIES:
             s["quality"] = DEFAULT_SETTINGS["quality"]
         s["fps"] = config.parse_fps(s.get("fps")) or DEFAULT_SETTINGS["fps"]
@@ -257,7 +298,11 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
                      aspect: str = Form("9:16"), quality: str = Form("1080p"), fps: int = Form(30),
                      subtitles: str = Form("1"), show_hook: str = Form("1"),
                      sub_place: str = Form("bottom"), clip_len: float = Form(config.DEFAULT_CLIP_LEN),
-                     watermark: str = Form(""), sub_font: str = Form(""), sub_effect: str = Form("none")):
+                     watermark: str = Form(""), sub_font: str = Form(""), sub_effect: str = Form("none"),
+                     layout: str = Form("game"), webcam_corner: str = Form("br"),
+                     webcam_size: float = Form(25), censor: str = Form("0"), sub_group: int = Form(0),
+                     encoder: str = Form("auto"), bitrate: str = Form("auto"),
+                     end_card: str = Form("0"), end_text: str = Form("Подпишись")):
         ctype = _content_type(content_type)
         suffix = Path(file.filename or "video.mp4").suffix.lower()
         if suffix not in ingest.VIDEO_EXT:
@@ -275,7 +320,10 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
                 "aspect": aspect, "quality": quality, "fps": fps,
                 "subtitles": subtitles, "show_hook": show_hook, "sub_place": sub_place,
                 "clip_len": clip_len,
-                "watermark": watermark, "sub_font": sub_font, "sub_effect": sub_effect}))
+                "watermark": watermark, "sub_font": sub_font, "sub_effect": sub_effect,
+                "layout": layout, "webcam_corner": webcam_corner, "webcam_size": webcam_size,
+                "censor": censor, "sub_group": sub_group, "encoder": encoder, "bitrate": bitrate,
+                "end_card": end_card, "end_text": end_text}))
             # Оригинал переносим в папку проекта, исходник не трогаем.
             dest = storage.project_dir(proj["id"]) / ("source" + suffix)
             shutil.copy2(tmp_file, dest)
@@ -345,9 +393,18 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
             # Выбор места из списка сбрасывает ручную позицию маркера, иначе она перекроет пресет.
             proj["options"]["sub_x"] = None
             proj["options"]["sub_y"] = None
+        # Монтаж и оформление: значения проходят ту же проверку, что и при создании проекта.
+        edit = {k: body[k] for k in EDIT_KEYS if k in body}
+        if edit:
+            norm = _options(edit)
+            for k in EDIT_KEYS:
+                if k in edit:
+                    proj["options"][k] = norm[k]
         for c in proj["clips"]:
             c["file"] = None
             c["status"] = "queued"
+            for k in EDIT_KEYS:
+                c[k] = proj["options"].get(k, c.get(k))
             c["framing"] = proj["options"].get("framing", "face")
             c["sub_box"] = _flag(proj["options"].get("sub_box"))
             c["sub_emoji"] = bool(proj["options"].get("sub_emoji"))

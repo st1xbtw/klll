@@ -14,7 +14,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import audio, config, faces, fonts, ingest, render, scoring, segments as sg, storage, subtitles, text_ai, tools, transcribe
+from . import audio, censor, config, encoders, faces, fonts, ingest, render, scoring, segments as sg, storage, subtitles, text_ai, tools, transcribe
 from .tools import StepCancelled, ToolError
 
 STEPS = ["source", "audio", "transcribe", "analyze", "clips"]
@@ -105,6 +105,12 @@ def _clip_dict(proj: dict, rank: int, segs: list, pct, reason: str, parts, origi
         "subtitles": opts.get("subtitles", ctype != "game"),
         "style": opts.get("subtitle_style", config.DEFAULT_SUBTITLE_STYLE),
         "timeline": [round(float(x), 3) for x in feat["loud"][::2]],
+        # Оформление: раскладка с вебкой, цензура, группы слов, кодировщик, заставка.
+        "layout": opts.get("layout", "game"), "webcam_corner": opts.get("webcam_corner", "br"),
+        "webcam_size": opts.get("webcam_size", 25), "censor": bool(opts.get("censor")),
+        "sub_group": int(opts.get("sub_group") or 0), "encoder": opts.get("encoder", "auto"),
+        "bitrate": opts.get("bitrate", "auto"), "end_card": bool(opts.get("end_card")),
+        "end_text": opts.get("end_text", ""), "nickname": opts.get("nickname", ""),
     }
 
 
@@ -297,6 +303,14 @@ def _render_one(proj: dict, clip: dict, src: Path, d: Path, words, segments, pre
     clip_words = sg.words_for_clip(segs, words or [])
     # Текст, который правил пользователь (sub_words), важнее расшифровки: из него строятся субтитры и описание.
     sub_words = clip.get("sub_words") or None
+    mutes: list = []
+    if clip.get("censor"):
+        # Мат маскируется и в субтитрах, и в описании; звук на этих словах глушится.
+        censored, mutes = censor.censor_words(sub_words or clip_words)
+        if sub_words:
+            sub_words = censored
+        else:
+            clip_words = censored
     clip_text = " ".join(w["w"] for w in (sub_words or clip_words))
     clip["text"] = clip_text
     sentences = [s["text"] for s in segments
@@ -305,8 +319,15 @@ def _render_one(proj: dict, clip: dict, src: Path, d: Path, words, segments, pre
     framing = clip.get("framing") or "face"
     out_w, out_h = config.out_size(clip.get("aspect"), clip.get("quality"))
     fps = config.parse_fps(clip.get("fps")) or config.DEFAULT_FPS
+    layout = render.resolve_layout(clip.get("layout") or "game", int(clip["index"]))
+    if layout != "game" and not render.split_supported(out_w, out_h):
+        layout = "game"                       # раскладка с вебкой только для 9:16
+    clip["layout_resolved"] = layout
+    encoder = encoders.resolve(clip.get("encoder"))
+    clip["encoder_used"] = encoder
+    bitrate = None if (clip.get("bitrate") or "auto") == "auto" else clip["bitrate"]
     plans: list = []
-    if framing == "face":
+    if framing == "face" and layout == "game":
         for a, b in segs:
             plans.append(faces.track_clip(src, a, b - a, proj["src_w"], proj["src_h"], out_w, out_h))
     else:
@@ -336,19 +357,33 @@ def _render_one(proj: dict, clip: dict, src: Path, d: Path, words, segments, pre
             box=bool(clip.get("sub_box")), anim=bool(clip.get("sub_anim")),
             emoji=bool(clip.get("sub_emoji")), out_w=out_w, out_h=out_h,
             watermark=watermark or None, font=family, pos=pos, effect=effect,
-            place=clip.get("sub_place") or config.DEFAULT_SUB_PLACE)
+            place=clip.get("sub_place") or config.DEFAULT_SUB_PLACE,
+            group_size=int(clip.get("sub_group") or 0))
     out = cdir / "clip.mp4"
+    opts_render = dict(out_w=out_w, out_h=out_h, fps=fps, layout=layout,
+                       corner=clip.get("webcam_corner") or "br",
+                       size_pct=float(clip.get("webcam_size") or 25), mutes=mutes,
+                       encoder=encoder, bitrate=bitrate)
     if len(segs) == 1:
         t0 = time.time()
         res = render.render_clip(src, start, dur, plans[0], ass, out, preset, cancel,
-                                 framing=framing, src_w=proj["src_w"], src_h=proj["src_h"],
-                                 out_w=out_w, out_h=out_h, fps=fps)
+                                 framing=framing, src_w=proj["src_w"], src_h=proj["src_h"], **opts_render)
     else:
         res = render.render_segments(src, [tuple(x) for x in segs], plans, framing,
-                                     proj["src_w"], proj["src_h"], ass, out, preset, cancel,
-                                     out_w=out_w, out_h=out_h, fps=fps)
+                                     proj["src_w"], proj["src_h"], ass, out, preset, cancel, **opts_render)
     if len(segs) == 1:
         note_render_speed(out_w * out_h * fps * dur, time.time() - t0)
+    if clip.get("end_card"):
+        lines = [clip.get("end_text") or "Подпишись"]
+        if clip.get("nickname"):
+            lines.append(clip["nickname"])
+        card = render.make_end_card(cdir / "endcard.mp4", out_w, out_h, fps, lines, preset,
+                                    encoder, bitrate)
+        joined = cdir / "clip_end.mp4"
+        render.append_end_card(out, card, joined)
+        card.unlink(missing_ok=True)
+        joined.replace(out)
+        res = render.verify(out, out_w, out_h, fps, expected=dur + render.END_CARD_SECONDS)
     render.make_thumb(out, cdir / "thumb.jpg")
     meta = text_ai.describe(clip_text, hook, ctype)
     platforms = text_ai.describe_platforms(clip_text, hook, ctype)

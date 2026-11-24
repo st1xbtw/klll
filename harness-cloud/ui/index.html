@@ -23,6 +23,20 @@
         <button class="nav-item" data-view="settings"><span data-icon="gear"></span>Настройки</button>
         <button class="nav-item" data-view="about"><span data-icon="info"></span>О приложении</button>
       </nav>
+      <div class="social card-mini" id="socialBox" hidden>
+        <div class="social-nick" id="socialNick"></div>
+        <div class="social-links">
+          <a class="social-link" id="linkTelegram" href="#" target="_blank" rel="noopener" title="Telegram" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 4.2 18.4 19c-.2 1-.9 1.3-1.7.8l-4.8-3.5-2.3 2.2c-.3.3-.5.5-1 .5l.3-4.8 8.8-7.9c.4-.3-.1-.5-.6-.2L6.6 13.2 1.9 11.7c-1-.3-1-1 .2-1.5L20.2 3.4c.8-.3 1.6.2 1.3 1.6z"/></svg>
+          </a>
+          <a class="social-link" id="linkTwitch" href="#" target="_blank" rel="noopener" title="Twitch" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 2 2 6v14h5v3h3l3-3h4l5-5V2H3zM9 7v5h2V7H9zm5 0v5h2V7h-2z"/></svg>
+          </a>
+          <a class="social-link" id="linkYoutube" href="#" target="_blank" rel="noopener" title="YouTube" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23 7.2c-.3-1.1-1.1-1.9-2.2-2.2C18.9 4.5 12 4.5 12 4.5s-6.9 0-8.8.5C2.1 5.3 1.3 6.1 1 7.2.5 9.1.5 12 .5 12s0 2.9.5 4.8c.3 1.1 1.1 1.9 2.2 2.2 1.9.5 8.8.5 8.8.5s6.9 0 8.8-.5c1.1-.3 1.9-1.1 2.2-2.2.5-1.9.5-4.8.5-4.8s0-2.9-.5-4.8zM9.7 15.5v-7l6 3.5z"/></svg>
+          </a>
+        </div>
+      </div>
       <div class="keys card-mini">
         <div class="mini-title"><span data-icon="star"></span>Быстрые клавиши</div>
         <div><kbd>Пробел</kbd> — play / pause</div>
@@ -181,6 +195,70 @@
                 <label class="switch-row"><span>Плашка под текстом</span><input type="checkbox" id="subBox" class="switch"></label>
                 <label class="switch-row"><span>Эмодзи к словам</span><input type="checkbox" id="subEmoji" class="switch"></label>
                 <label class="switch-row"><span>Анимация появления слов</span><input type="checkbox" id="subAnim" class="switch"></label>
+              </div>
+              <div class="field montage" id="montage">
+                <span class="field-title">Монтаж и оформление</span>
+                <div class="seg" id="layoutSeg" role="radiogroup" aria-label="Раскладка кадра">
+                  <button type="button" class="seg-btn active" data-layout="game" role="radio" aria-checked="true">Без вебки</button>
+                  <button type="button" class="seg-btn" data-layout="webcam_bottom" role="radio" aria-checked="false">Вебка снизу</button>
+                  <button type="button" class="seg-btn" data-layout="webcam_top" role="radio" aria-checked="false">Вебка сверху</button>
+                  <button type="button" class="seg-btn" data-layout="random" role="radio" aria-checked="false">Случайно</button>
+                </div>
+                <input type="hidden" id="layout" value="game">
+                <div class="pair" id="camRow">
+                  <label class="field-sm">Угол вебки
+                    <select id="webcamCorner" class="select select-sm">
+                      <option value="br">Справа снизу</option>
+                      <option value="bl">Слева снизу</option>
+                      <option value="tr">Справа сверху</option>
+                      <option value="tl">Слева сверху</option>
+                    </select>
+                  </label>
+                  <label class="field-sm">Размер вебки <span class="pct-lbl" id="webcamSizeLbl">25%</span>
+                    <input type="range" id="webcamSize" class="range" min="12" max="50" step="1" value="25">
+                  </label>
+                </div>
+                <div class="sub-preview" id="subPreview" aria-hidden="true">
+                  <div class="sp-screen">
+                    <div class="sp-zone sp-game" id="spGame">Игра</div>
+                    <div class="sp-zone sp-cam" id="spCam" hidden>Вебка</div>
+                    <div class="sp-text" id="spText"></div>
+                  </div>
+                  <p class="hint" id="spHint">Предпросмотр субтитров: цвета и место из выбранного стиля</p>
+                </div>
+                <div class="pair">
+                  <label class="field-sm">Слов в строке
+                    <select id="subGroup" class="select select-sm">
+                      <option value="0">Авто</option>
+                      <option value="1">1</option>
+                      <option value="2">2</option>
+                      <option value="3">3</option>
+                      <option value="4">4</option>
+                    </select>
+                  </label>
+                  <label class="field-sm">Кодирование
+                    <select id="encoder" class="select select-sm">
+                      <option value="auto">Авто</option>
+                      <option value="cpu">Процессор</option>
+                      <option value="nvenc">NVIDIA (NVENC)</option>
+                      <option value="qsv">Intel (QSV)</option>
+                      <option value="amf">AMD (AMF)</option>
+                    </select>
+                  </label>
+                </div>
+                <p class="hint" id="encHint"></p>
+                <label class="field-sm">Битрейт
+                  <select id="bitrate" class="select select-sm">
+                    <option value="auto">Авто (по качеству)</option>
+                    <option value="6M">6 Мбит/с</option>
+                    <option value="8M">8 Мбит/с</option>
+                    <option value="12M">12 Мбит/с</option>
+                    <option value="16M">16 Мбит/с</option>
+                  </select>
+                </label>
+                <label class="switch-row"><span>Заглушить и скрыть мат (звук и буквы)</span><input type="checkbox" id="censor" class="switch"></label>
+                <label class="switch-row"><span>Концовка 3 с с призывом подписаться</span><input type="checkbox" id="endCard" class="switch"></label>
+                <input id="endText" class="input input-sm" maxlength="40" placeholder="Подпишись" autocomplete="off">
               </div>
             </div>
             <button class="btn btn-primary btn-xl" id="startBtn"><span data-icon="wand"></span>Начать обработку<span data-icon="chev-r"></span></button>
@@ -407,6 +485,28 @@
             </div>
             <small class="hint">Готовые клипы и ZIP копируются сюда автоматически после обработки.</small>
           </div>
+          <label class="field">Ник (сайдбар и концовка клипа)
+            <input id="setNickname" class="input input-sm" maxlength="40" placeholder="например, mychannel" autocomplete="off" spellcheck="false">
+          </label>
+          <label class="field">Ссылка на Telegram
+            <input id="setTelegram" class="input input-sm" placeholder="https://t.me/…" spellcheck="false">
+          </label>
+          <label class="field">Ссылка на Twitch
+            <input id="setTwitch" class="input input-sm" placeholder="https://www.twitch.tv/…" spellcheck="false">
+          </label>
+          <label class="field">Ссылка на YouTube
+            <input id="setYoutube" class="input input-sm" placeholder="https://www.youtube.com/@…" spellcheck="false">
+          </label>
+          <label class="field">Кодирование по умолчанию
+            <select id="setEncoder" class="select">
+              <option value="auto">Авто (видеокарта, если найдена)</option>
+              <option value="cpu">Процессор</option>
+              <option value="nvenc">NVIDIA (NVENC)</option>
+              <option value="qsv">Intel (QSV)</option>
+              <option value="amf">AMD (AMF)</option>
+            </select>
+          </label>
+          <p class="hint" id="setEncStatus"></p>
           <label class="switch-row"><span>Уведомлять о завершении</span><input type="checkbox" id="setNotify" class="switch" checked></label>
           <label class="switch-row"><span>Офлайн-режим: без интернета, без ИИ-заголовков и загрузки по ссылке</span><input type="checkbox" id="setOffline" class="switch"></label>
           <div class="row-end"><button class="btn btn-accent" id="saveSettings"><span data-icon="check"></span>Сохранить</button></div>

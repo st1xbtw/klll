@@ -310,6 +310,8 @@
     fd.append("subtitles", $("subsOn").checked ? "1" : "0");
     fd.append("show_hook", $("showHook").checked ? "1" : "0");
     fd.append("sub_place", $("subPlace").value);
+    Object.entries(montageOptions()).forEach(([k, v]) =>
+      fd.append(k, typeof v === "boolean" ? (v ? "1" : "0") : String(v)));
     toast(`Загрузка файла «${file.name}»…`);
     try {
       const r = await api("/api/projects/upload", { method: "POST", body: fd });
@@ -335,6 +337,7 @@
         aspect: $("aspect").value, quality: $("quality").value, fps: Number($("fps").value),
         subtitles: $("subsOn").checked,
         show_hook: $("showHook").checked, sub_place: $("subPlace").value,
+        ...montageOptions(),
         watermark: $("watermark").value.trim(),
         sub_font: $("subFont").value, sub_effect: $("subEffect").value || "none",
       }});
@@ -924,6 +927,123 @@
     restyle({ sub_place: $("subPlace").value }, "Перерендер клипов: новое место субтитров"));
   $("showHook").addEventListener("change", () =>
     restyle({ show_hook: $("showHook").checked }, "Перерендер клипов: хук включён или выключен"));
+  // ---------- монтаж и оформление: раскладка, цензура, кодирование, концовка ----------
+  function montageOptions() {
+    return {
+      layout: $("layout").value,
+      webcam_corner: $("webcamCorner").value,
+      webcam_size: Number($("webcamSize").value),
+      censor: $("censor").checked,
+      sub_group: Number($("subGroup").value),
+      encoder: $("encoder").value,
+      bitrate: $("bitrate").value,
+      end_card: $("endCard").checked,
+      end_text: $("endText").value.trim() || "Подпишись",
+    };
+  }
+  function setLayout(value, notify) {
+    $("layout").value = value;
+    document.querySelectorAll("#layoutSeg .seg-btn").forEach((b) => {
+      const on = b.dataset.layout === value;
+      b.classList.toggle("active", on);
+      b.setAttribute("aria-checked", String(on));
+    });
+    $("camRow").hidden = value === "game";
+    renderSubPreview();
+    if (notify) $("layout").dispatchEvent(new Event("change"));
+  }
+  document.querySelectorAll("#layoutSeg .seg-btn").forEach((b) =>
+    b.addEventListener("click", () => setLayout(b.dataset.layout, true)));
+  $("layout").addEventListener("change", () =>
+    restyle({ layout: $("layout").value }, "Перерендер клипов: новая раскладка"));
+  $("webcamCorner").addEventListener("change", () =>
+    restyle({ webcam_corner: $("webcamCorner").value }, "Перерендер клипов: угол вебки"));
+  $("webcamSize").addEventListener("input", () => { $("webcamSizeLbl").textContent = `${$("webcamSize").value}%`; });
+  $("webcamSize").addEventListener("change", () =>
+    restyle({ webcam_size: Number($("webcamSize").value) }, "Перерендер клипов: размер вебки"));
+  $("censor").addEventListener("change", () =>
+    restyle({ censor: $("censor").checked }, "Перерендер клипов: цензура"));
+  $("subGroup").addEventListener("change", () => {
+    renderSubPreview();
+    restyle({ sub_group: Number($("subGroup").value) }, "Перерендер клипов: группировка субтитров");
+  });
+  $("encoder").addEventListener("change", () =>
+    restyle({ encoder: $("encoder").value }, "Перерендер клипов: кодирование"));
+  $("bitrate").addEventListener("change", () =>
+    restyle({ bitrate: $("bitrate").value }, "Перерендер клипов: битрейт"));
+  $("endCard").addEventListener("change", () =>
+    restyle({ end_card: $("endCard").checked }, "Перерендер клипов: концовка"));
+  $("endText").addEventListener("change", () =>
+    restyle({ end_text: $("endText").value.trim() || "Подпишись" }, "Перерендер клипов: текст концовки"));
+  $("subStyle").addEventListener("change", renderSubPreview);
+  $("subPlace").addEventListener("change", renderSubPreview);
+
+  // Перевод ASS-цвета (&HAABBGGRR&) в CSS (#RRGGBB).
+  function cssColor(ass) {
+    const m = /&H[0-9A-Fa-f]{2}([0-9A-Fa-f]{2})([0-9A-Fa-f]{2})([0-9A-Fa-f]{2})&/.exec(ass || "");
+    return m ? `#${m[3]}${m[2]}${m[1]}` : "#ffffff";
+  }
+  // Приблизительный предпросмотр: цвета и место берутся из выбранного стиля, геометрия — из раскладки.
+  function renderSubPreview() {
+    const screen = document.querySelector("#subPreview .sp-screen");
+    if (!screen || !state.meta) return;
+    const style = (state.meta.subtitle_colors || {})[$("subStyle").value] || {};
+    const layout = $("layout").value;
+    const hasCam = layout !== "game";
+    const camTop = layout === "webcam_top";
+    const corner = { br: "справа снизу", bl: "слева снизу", tr: "справа сверху", tl: "слева сверху" };
+    const game = $("spGame"), cam = $("spCam"), text = $("spText");
+    cam.hidden = !hasCam;
+    cam.textContent = layout === "random" ? "Вебка: случайно" : `Вебка: ${corner[$("webcamCorner").value] || ""}`;
+    // Игра 1240 px и вебка 680 px из кадра 1080×1920.
+    game.style.flexGrow = hasCam ? "1240" : "1";
+    cam.style.flexGrow = "680";
+    cam.style.order = camTop ? "0" : "2";
+    game.style.order = "1";
+    screen.style.setProperty("--sp-base", cssColor(style.base));
+    screen.style.setProperty("--sp-hi", cssColor(style.highlight));
+    screen.style.setProperty("--sp-ol", cssColor(style.outline));
+    const group = Number($("subGroup").value) || 3;
+    const words = ["Смотрите", "как", "это", "работает", "просто", "и", "быстро"];
+    const lines = [];
+    for (let i = 0; i < words.length; i += group) lines.push(words.slice(i, i + group));
+    let idx = 0;
+    text.className = `sp-text ${$("subPlace").value || "bottom"}`;
+    text.innerHTML = lines.map((ln) => `<div class="sp-line">${ln.map((w) => {
+      const cls = idx === 1 ? ' class="hi"' : "";
+      idx += 1;
+      return `<span${cls}>${w}</span>`;
+    }).join(" ")}</div>`).join("");
+  }
+
+  // Видеокарты: что найдено на этой машине. Показывается на главной и в настройках.
+  async function loadEncoders() {
+    let data;
+    try { data = await api("/api/encoders"); } catch (e) { return; }
+    const found = Object.entries(data).filter(([k, v]) => k !== "cpu" && v.available).map(([, v]) => v.title);
+    const text = found.length
+      ? `Найдено: ${found.join(", ")}. «Авто» использует её, иначе рендер идёт на процессоре.`
+      : "Видеокарта не найдена: рендер идёт на процессоре.";
+    $("encHint").textContent = text;
+    $("setEncStatus").textContent = text;
+  }
+
+  // Блок в боковой панели: ник белым и значки ссылок.
+  function renderSocial(s) {
+    const nick = (s && s.nickname || "").replace(/^@/, "");
+    let any = false;
+    [["linkTelegram", s && s.social_telegram], ["linkTwitch", s && s.social_twitch],
+     ["linkYoutube", s && s.social_youtube]].forEach(([id, url]) => {
+      const a = $(id);
+      const ok = /^https:\/\//.test(url || "");
+      a.hidden = !ok;
+      if (ok) { a.href = url; any = true; }
+    });
+    $("socialNick").textContent = nick;
+    $("socialNick").hidden = !nick;
+    $("socialBox").hidden = !(nick || any);
+  }
+
   [["subBox", "sub_box"], ["subEmoji", "sub_emoji"], ["subAnim", "sub_anim"]].forEach(([id, key]) =>
     $(id).addEventListener("change", () =>
       restyle({ [key]: $(id).checked }, "Перерендер клипов с новыми субтитрами")));
@@ -1028,6 +1148,17 @@
     $("subBox").checked = !!o.sub_box;
     $("subEmoji").checked = !!o.sub_emoji;
     $("subAnim").checked = !!o.sub_anim;
+    setLayout(o.layout || "game", false);
+    $("webcamCorner").value = o.webcam_corner || "br";
+    $("webcamSize").value = String(o.webcam_size || 25);
+    $("webcamSizeLbl").textContent = `${$("webcamSize").value}%`;
+    $("censor").checked = !!o.censor;
+    $("subGroup").value = String(o.sub_group || 0);
+    $("encoder").value = o.encoder || "auto";
+    $("bitrate").value = o.bitrate || "auto";
+    $("endCard").checked = !!o.end_card;
+    $("endText").value = o.end_text || "Подпишись";
+    renderSubPreview();
   }
 
   // ---------- история ----------
@@ -1079,6 +1210,11 @@
     $("setQuality").value = s.quality || "1080p";
     $("setFps").value = String(s.fps || 30);
     $("setMinScore").value = String(s.save_min_score || 0);
+    $("setNickname").value = s.nickname || "";
+    $("setTelegram").value = s.social_telegram || "";
+    $("setTwitch").value = s.social_twitch || "";
+    $("setYoutube").value = s.social_youtube || "";
+    $("setEncoder").value = s.encoder || "auto";
   }
   async function saveSettings() {
     const body = {
@@ -1093,11 +1229,18 @@
       fps: Number($("setFps").value),
       save_min_score: Number($("setMinScore").value) || 0,
       offline: $("setOffline").checked,
+      nickname: $("setNickname").value.trim(),
+      social_telegram: $("setTelegram").value.trim(),
+      social_twitch: $("setTwitch").value.trim(),
+      social_youtube: $("setYoutube").value.trim(),
+      encoder: $("setEncoder").value,
     };
     try {
       state.settings = await api("/api/settings", { method: "PUT", body });
       applyTheme(body.theme, false);
       applyFormDefaults();
+      renderSocial(state.settings);
+      loadEncoders();
       toast("Настройки сохранены", "ok");
     } catch (e) { toast(e.message, "err"); }
   }
@@ -1128,6 +1271,8 @@
     $("exportPreset").value = s.export_preset;
     $("quality").value = s.quality || "1080p";
     $("fps").value = String(s.fps || 30);
+    $("encoder").value = s.encoder || "auto";
+    setLayout($("layout").value, false);
     updateEstimate();
   }
   // ---------- оценка времени рендера ----------
@@ -1182,6 +1327,8 @@
     fillSelect($("setPreset"), presets);
     fillSettingsForm();
     applyFormDefaults();
+    renderSocial(state.settings);
+    loadEncoders();
     applyTheme(state.settings.theme || "dark", false);
     setContentType(state.contentType);
     $("aboutSub").textContent = `${state.meta.name} ${state.meta.version}`;
