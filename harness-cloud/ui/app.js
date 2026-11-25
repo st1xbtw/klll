@@ -989,6 +989,7 @@
       end_card: $("endCard").checked,
       banner: $("banner").checked,
       banner_at: 0.5,
+      banner_sec: Number($("bannerSec").value) || 3,
       end_text: $("endText").value.trim() || "Подпишись",
       social_badge: $("socialBadge").checked,
       social_pos: $("socialPos").value,
@@ -1053,6 +1054,11 @@
       toast("Баннер убран");
       loadBannerState();
     } catch (e) { toast(e.message, "err"); }
+  });
+  $("bannerSec").addEventListener("change", () => {
+    const v = Math.min(600, Math.max(0.5, Number($("bannerSec").value) || 3));
+    $("bannerSec").value = v;
+    if ($("banner").checked && state.pid) restyle({ banner_sec: v }, "Перерендер клипов: длительность баннера");
   });
   $("banner").addEventListener("change", () =>
     restyle({ banner: $("banner").checked }, "Перерендер клипов: баннер"));
@@ -1258,6 +1264,7 @@
     $("bitrate").value = o.bitrate || "auto";
     $("endCard").checked = !!o.end_card;
     $("banner").checked = !!o.banner;
+    $("bannerSec").value = o.banner_sec || 3;
     $("endText").value = o.end_text || "Подпишись";
     $("socialBadge").checked = !!o.social_badge;
     $("socialPos").value = o.social_pos || "top";

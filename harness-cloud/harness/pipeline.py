@@ -118,6 +118,7 @@ def _clip_dict(proj: dict, rank: int, segs: list, pct, reason: str, parts, origi
         "pan_x": 50, "pan_y": 50, "zoom": 0, "blur": 40, "sub_scale": 100,
         # Баннер в середине клипа: картинка из настроек, точка вставки — доля длительности.
         "banner": bool(opts.get("banner")), "banner_at": float(opts.get("banner_at") or 0.5),
+        "banner_sec": banner_mod.clamp_banner_sec(opts.get("banner_sec")),
     }
 
 
@@ -402,10 +403,11 @@ def _render_one(proj: dict, clip: dict, src: Path, d: Path, words, segments, pre
         # Баннер вставляется в готовый клип: стоп-кадр с субтитрами и значками, затем продолжение.
         bclip = cdir / "clip_banner.mp4"
         banner_mod.add_banner(out, config.BANNER_FILE, bclip, dur, out_w, out_h, fps, cancel,
-                              fraction=float(clip.get("banner_at") or 0.5), encoder=encoder,
-                              bitrate=bitrate)
+                              fraction=float(clip.get("banner_at") or 0.5),
+                              banner_sec=banner_mod.clamp_banner_sec(clip.get("banner_sec")),
+                              encoder=encoder, bitrate=bitrate)
         bclip.replace(out)
-        dur = dur + banner_mod.BANNER_SEC
+        dur = dur + banner_mod.clamp_banner_sec(clip.get("banner_sec"))
         res = render.verify(out, out_w, out_h, fps, expected=dur)
     if clip.get("end_card"):
         lines = [clip.get("end_text") or "Подпишись"]

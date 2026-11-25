@@ -78,7 +78,7 @@ def _flag(value) -> bool:
 
 LAYOUTS = ("game", "webcam_bottom", "webcam_top", "random")
 EDIT_KEYS = ("layout", "webcam_corner", "webcam_size", "censor", "sub_group", "encoder", "bitrate",
-             "end_card", "end_text", "social_badge", "social_pos", "banner", "banner_at")
+             "end_card", "end_text", "social_badge", "social_pos", "banner", "banner_at", "banner_sec")
 SOCIAL_POS = ("top", "center", "bottom")
 SOCIAL_KEYS = ("telegram", "twitch", "youtube", "tiktok")
 ENCODER_CHOICES = ("auto", "cpu", "nvenc", "qsv", "amf")
@@ -126,6 +126,7 @@ def _options(payload: dict) -> dict:
         "end_card": _flag(payload.get("end_card")),
         "banner": _flag(payload.get("banner")),
         "banner_at": _clamp_num(payload.get("banner_at"), 0.1, 0.9, 0.5),
+        "banner_sec": _clamp_num(payload.get("banner_sec"), 0.5, 600, 3.0),
         "end_text": str(payload.get("end_text") or "Подпишись").strip()[:40] or "Подпишись",
         "nickname": str(s.get("nickname") or "").strip()[:40],
         "social_badge": _flag(payload.get("social_badge")),
@@ -351,7 +352,8 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
                      encoder: str = Form("auto"), bitrate: str = Form("auto"),
                      end_card: str = Form("0"), end_text: str = Form("Подпишись"),
                      social_badge: str = Form("0"), social_pos: str = Form("top"),
-                     banner: str = Form("0"), banner_at: float = Form(0.5)):
+                     banner: str = Form("0"), banner_at: float = Form(0.5),
+                     banner_sec: float = Form(3.0)):
         ctype = _content_type(content_type)
         suffix = Path(file.filename or "video.mp4").suffix.lower()
         if suffix not in ingest.VIDEO_EXT:
@@ -374,7 +376,7 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
                 "censor": censor, "sub_group": sub_group, "encoder": encoder, "bitrate": bitrate,
                 "end_card": end_card, "end_text": end_text,
                 "social_badge": social_badge, "social_pos": social_pos,
-                "banner": banner, "banner_at": banner_at}))
+                "banner": banner, "banner_at": banner_at, "banner_sec": banner_sec}))
             # Оригинал переносим в папку проекта, исходник не трогаем.
             dest = storage.project_dir(proj["id"]) / ("source" + suffix)
             shutil.copy2(tmp_file, dest)

@@ -87,3 +87,26 @@ def test_banner_upload_rejects_non_images_and_saves_png(tmp_path, monkeypatch):
     assert client.get("/api/banner").json() == {"exists": True}
     client.delete("/api/banner")
     assert client.get("/api/banner").json() == {"exists": False}
+
+
+def test_banner_duration_is_any_value_within_limits():
+    assert banner.clamp_banner_sec(7) == 7.0
+    assert banner.clamp_banner_sec(0.1) == 0.5
+    assert banner.clamp_banner_sec(9999) == 600.0
+    assert banner.clamp_banner_sec("abc") == banner.BANNER_SEC
+
+
+def test_banner_render_uses_chosen_duration(tmp_path):
+    src = tmp_path / "clip.mp4"
+    subprocess.run([tools.ffmpeg_bin(), "-y", "-v", "error", "-f", "lavfi", "-i",
+                    "testsrc=size=1080x1920:rate=30:duration=10", "-f", "lavfi", "-i",
+                    "sine=frequency=330:duration=10", "-shortest", "-c:v", "libx264",
+                    "-pix_fmt", "yuv420p", "-c:a", "aac", str(src)], check=True)
+    png = tmp_path / "banner.png"
+    subprocess.run([tools.ffmpeg_bin(), "-y", "-v", "error", "-f", "lavfi", "-i",
+                    "color=c=0x2a1030:size=800x400:d=1", "-frames:v", "1", str(png)], check=True)
+    out = tmp_path / "out.mp4"
+    banner.add_banner(src, png, out, 10.0, 1080, 1920, 30, threading.Event(), banner_sec=6.0)
+    result = subprocess.run([tools.ffprobe_bin(), "-v", "error", "-show_entries", "format=duration",
+                             "-of", "default=nw=1:nk=1", str(out)], capture_output=True, text=True)
+    assert abs(float(result.stdout.strip()) - 16.0) < 0.15

@@ -11,7 +11,16 @@ from pathlib import Path
 from . import config, tools
 from .render import _encode_args, _run_ffmpeg
 
-BANNER_SEC = 3.0          # сколько секунд стоит баннер
+BANNER_SEC = 3.0          # длительность по умолчанию; задаётся настройкой, допустимо 0.5–600 с
+MAX_BANNER_SEC = 600.0
+MIN_BANNER_SEC = 0.5
+
+
+def clamp_banner_sec(value, default: float = BANNER_SEC) -> float:
+    try:
+        return round(max(MIN_BANNER_SEC, min(MAX_BANNER_SEC, float(value))), 2)
+    except (TypeError, ValueError):
+        return default
 MIN_CLIP = 8.0            # короче этого клипа баннер не вставляем, иначе он закроет весь ролик
 
 
@@ -48,6 +57,7 @@ def add_banner(clip: Path, banner: Path, out: Path, duration: float, out_w: int,
     """Вставляет баннер в клип. Возвращает время вставки; при короткой длительности ничего не делает."""
     if duration < MIN_CLIP:
         raise tools.ToolError("Клип слишком короткий для баннера")
+    banner_sec = clamp_banner_sec(banner_sec)
     at = banner_position(duration, fraction)
     out.parent.mkdir(parents=True, exist_ok=True)
     cmd = [tools.ffmpeg_bin(), "-y", "-v", "error",
