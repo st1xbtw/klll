@@ -78,7 +78,7 @@ def _flag(value) -> bool:
 
 LAYOUTS = ("game", "webcam_bottom", "webcam_top", "random")
 EDIT_KEYS = ("layout", "webcam_corner", "webcam_size", "censor", "sub_group", "encoder", "bitrate",
-             "end_card", "end_text", "social_badge", "social_pos")
+             "end_card", "end_text", "social_badge", "social_pos", "banner", "banner_at")
 SOCIAL_POS = ("top", "center", "bottom")
 SOCIAL_KEYS = ("telegram", "twitch", "youtube", "tiktok")
 ENCODER_CHOICES = ("auto", "cpu", "nvenc", "qsv", "amf")
@@ -124,6 +124,8 @@ def _options(payload: dict) -> dict:
         "encoder": payload.get("encoder") if payload.get("encoder") in ENCODER_CHOICES else (s.get("encoder") or "auto"),
         "bitrate": payload.get("bitrate") if payload.get("bitrate") in BITRATES else "auto",
         "end_card": _flag(payload.get("end_card")),
+        "banner": _flag(payload.get("banner")),
+        "banner_at": _clamp_num(payload.get("banner_at"), 0.1, 0.9, 0.5),
         "end_text": str(payload.get("end_text") or "Подпишись").strip()[:40] or "Подпишись",
         "nickname": str(s.get("nickname") or "").strip()[:40],
         "social_badge": _flag(payload.get("social_badge")),
@@ -195,6 +197,36 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
             print(f"Список шрифтов недоступен: {exc}", flush=True)
             items = []
         return {"fonts": items, "effects": config.SUB_EFFECTS}
+
+    @app.get("/api/banner")
+    async def banner_state():
+        return {"exists": config.BANNER_FILE.exists()}
+
+    @app.post("/api/banner")
+    async def upload_banner(file: UploadFile = File(...)):
+        """Картинка баннера для середины клипа: сохраняется как PNG, ширина подгоняется при рендере."""
+        from PIL import Image
+        tmp = Path(tempfile.mkdtemp(prefix="banner-")) / "upload"
+        try:
+            with open(tmp, "wb") as fh:
+                shutil.copyfileobj(file.file, fh, length=1024 * 1024)
+            try:
+                im = Image.open(tmp)
+                im.load()
+                im = im.convert("RGBA")
+            except Exception:
+                raise HTTPException(400, "Нужна картинка PNG или JPG")
+            if im.width < 200 or im.height < 60:
+                raise HTTPException(400, "Баннер слишком маленький: нужно не меньше 200×60 пикселей")
+            im.save(config.BANNER_FILE, "PNG")
+            return {"ok": True, "size": [im.width, im.height]}
+        finally:
+            shutil.rmtree(tmp.parent, ignore_errors=True)
+
+    @app.delete("/api/banner")
+    async def remove_banner():
+        config.BANNER_FILE.unlink(missing_ok=True)
+        return {"ok": True, "exists": False}
 
     @app.post("/api/fonts")
     async def upload_font(file: UploadFile = File(...)):
@@ -318,7 +350,8 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
                      webcam_size: float = Form(25), censor: str = Form("0"), sub_group: int = Form(0),
                      encoder: str = Form("auto"), bitrate: str = Form("auto"),
                      end_card: str = Form("0"), end_text: str = Form("Подпишись"),
-                     social_badge: str = Form("0"), social_pos: str = Form("top")):
+                     social_badge: str = Form("0"), social_pos: str = Form("top"),
+                     banner: str = Form("0"), banner_at: float = Form(0.5)):
         ctype = _content_type(content_type)
         suffix = Path(file.filename or "video.mp4").suffix.lower()
         if suffix not in ingest.VIDEO_EXT:
@@ -340,7 +373,8 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
                 "layout": layout, "webcam_corner": webcam_corner, "webcam_size": webcam_size,
                 "censor": censor, "sub_group": sub_group, "encoder": encoder, "bitrate": bitrate,
                 "end_card": end_card, "end_text": end_text,
-                "social_badge": social_badge, "social_pos": social_pos}))
+                "social_badge": social_badge, "social_pos": social_pos,
+                "banner": banner, "banner_at": banner_at}))
             # Оригинал переносим в папку проекта, исходник не трогаем.
             dest = storage.project_dir(proj["id"]) / ("source" + suffix)
             shutil.copy2(tmp_file, dest)
@@ -470,6 +504,50 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
         storage.save_project(proj)
         holder["jobs"].submit(pid, retry=True)
         return {"ok": True, "start": new_start, "end": new_end}
+
+    @app.post("/api/projects/{pid}/clips/{idx}/look")
+    async def look(pid: str, idx: int, request: Request):
+        """Постановка одного клипа: вебка (без/снизу/сверху), её угол и размер, сдвиг и зум кадра,
+        блюр фона, масштаб и место субтитров. Меняются только переданные поля; клип пересобирается."""
+        body = await request.json()
+        proj = storage.load_project(pid)
+        if proj["status"] == "running":
+            raise HTTPException(409, "Дождитесь окончания обработки")
+        clip = next((c for c in proj["clips"] if c["index"] == idx), None)
+        if clip is None:
+            raise HTTPException(404, "Клип не найден")
+        changes: dict = {}
+        if "layout" in body:
+            # «Без вебки» — это раскладка game: вебка не выводится вовсе.
+            if body["layout"] not in ("game", "webcam_bottom", "webcam_top"):
+                raise HTTPException(400, "Раскладка: без вебки, снизу или сверху")
+            changes["layout"] = body["layout"]
+        if "webcam_corner" in body:
+            if body["webcam_corner"] not in ("br", "bl", "tr", "tl"):
+                raise HTTPException(400, "Угол вебки: br, bl, tr или tl")
+            changes["webcam_corner"] = body["webcam_corner"]
+        if "webcam_size" in body:
+            changes["webcam_size"] = int(_clamp_num(body["webcam_size"], 10, 40, 25))
+        if "framing" in body:
+            if body["framing"] not in FRAMINGS:
+                raise HTTPException(400, "Кадрирование: face или fit")
+            changes["framing"] = body["framing"]
+        for key, lo, hi, default in (("pan_x", 0, 100, 50), ("pan_y", 0, 100, 50),
+                                     ("zoom", 0, 50, 0), ("blur", 5, 60, 40),
+                                     ("sub_scale", 50, 200, 100)):
+            if key in body:
+                changes[key] = int(round(_clamp_num(body[key], lo, hi, default)))
+        if "sub_place" in body:
+            if body["sub_place"] not in config.SUB_PLACES:
+                raise HTTPException(400, "Субтитры: bottom, center или top")
+            changes["sub_place"] = body["sub_place"]
+        if not changes:
+            raise HTTPException(400, "Нечего менять")
+        clip.update(changes)
+        clip.update({"file": None, "status": "queued", "error": None})
+        storage.save_project(proj)
+        holder["jobs"].submit(pid, retry=True)
+        return {"ok": True, "changed": sorted(changes)}
 
     def _load_idle(pid: str) -> dict:
         try:

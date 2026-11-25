@@ -592,7 +592,56 @@
     };
   }
 
+  // Постановка клипа: раскладка, вебка, сдвиг, зум, блюр, размер субтитров.
+  const LOOK_FIELDS = [["lookPanX", "pan_x", "lookPanXVal"], ["lookPanY", "pan_y", "lookPanYVal"],
+    ["lookZoom", "zoom", "lookZoomVal"], ["lookBlur", "blur", "lookBlurVal"],
+    ["lookSubScale", "sub_scale", "lookSubScaleVal"], ["lookCamSize", "webcam_size", "lookCamSizeVal"]];
+  function lookValues() {
+    const out = { layout: document.querySelector("#lookLayout .seg-btn.active")?.dataset.lookLayout || "game",
+      webcam_corner: $("lookCorner").value };
+    LOOK_FIELDS.forEach(([id, key]) => { out[key] = Number($(id).value); });
+    return out;
+  }
+  function fillLook(clip) {
+    const v = {
+      pan_x: clip.pan_x ?? 50, pan_y: clip.pan_y ?? 50, zoom: clip.zoom ?? 0, blur: clip.blur ?? 40,
+      sub_scale: clip.sub_scale ?? 100, webcam_size: clip.webcam_size ?? 25,
+    };
+    LOOK_FIELDS.forEach(([id, key, lbl]) => { $(id).value = v[key]; $(lbl).textContent = v[key]; });
+    $("lookCorner").value = clip.webcam_corner || "br";
+    document.querySelectorAll("#lookLayout .seg-btn").forEach((b) =>
+      b.classList.toggle("active", b.dataset.lookLayout === (clip.layout || "game")));
+    const ready = !!clip.file;
+    $("lookRebuild").disabled = false;
+    $("lookReset").disabled = false;
+    document.querySelectorAll("#lookBox input, #lookBox select, #lookLayout .seg-btn").forEach((el) => el.disabled = false);
+    return ready;
+  }
+  LOOK_FIELDS.forEach(([id, , lbl]) => $(id).addEventListener("input", () => { $(lbl).textContent = $(id).value; }));
+  document.querySelectorAll("#lookLayout .seg-btn").forEach((b) => b.addEventListener("click", () => {
+    document.querySelectorAll("#lookLayout .seg-btn").forEach((x) => x.classList.toggle("active", x === b));
+  }));
+  async function sendLook(clip, body, msg) {
+    try {
+      await api(`/api/projects/${encodeURIComponent(state.pid)}/clips/${clip.index}/look`, { method: "POST", body });
+      toast(msg);
+      startPolling();
+    } catch (e) { toast(e.message, "err"); }
+  }
+  $("lookRebuild").addEventListener("click", () => {
+    const clip = currentClips().find((c) => c.index === state.selected);
+    if (clip) sendLook(clip, lookValues(), "Клип пересобирается с новой постановкой");
+  });
+  $("lookReset").addEventListener("click", () => {
+    const clip = currentClips().find((c) => c.index === state.selected);
+    if (!clip) return;
+    const reset = { layout: "game", webcam_corner: "br", webcam_size: 25, pan_x: 50, pan_y: 50, zoom: 0, blur: 40, sub_scale: 100 };
+    fillLook({ ...clip, ...reset, layout: "game" });
+    sendLook(clip, reset, "Постановка клипа сброшена");
+  });
+
   function refreshSidePanel(clip) {
+    fillLook(clip);
     const shift = Number(clip.shift || 0);
     const trim = $("trim");
     trim.disabled = !clip.file;
@@ -938,6 +987,8 @@
       encoder: $("encoder").value,
       bitrate: $("bitrate").value,
       end_card: $("endCard").checked,
+      banner: $("banner").checked,
+      banner_at: 0.5,
       end_text: $("endText").value.trim() || "Подпишись",
       social_badge: $("socialBadge").checked,
       social_pos: $("socialPos").value,
@@ -973,6 +1024,39 @@
     restyle({ encoder: $("encoder").value }, "Перерендер клипов: кодирование"));
   $("bitrate").addEventListener("change", () =>
     restyle({ bitrate: $("bitrate").value }, "Перерендер клипов: битрейт"));
+  async function loadBannerState() {
+    try {
+      const r = await api("/api/banner");
+      $("bannerState").textContent = r.exists ? "Баннер загружен: вставится в середину клипа" : "Баннер не загружен";
+      $("bannerClear").disabled = !r.exists;
+    } catch (e) { /* без баннера интерфейс работает как раньше */ }
+  }
+  $("bannerBtn").addEventListener("click", () => $("bannerFile").click());
+  $("bannerFile").addEventListener("change", async () => {
+    const file = $("bannerFile").files[0];
+    $("bannerFile").value = "";
+    if (!file) return;
+    const fd = new FormData();
+    fd.append("file", file);
+    try {
+      const res = await fetch("/api/banner", { method: "POST", body: fd });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Не удалось загрузить баннер");
+      toast("Баннер загружен", "ok");
+      loadBannerState();
+      if ($("banner").checked && state.pid) restyle({ banner: true }, "Перерендер клипов с баннером");
+    } catch (e) { toast(e.message, "err"); }
+  });
+  $("bannerClear").addEventListener("click", async () => {
+    try {
+      await api("/api/banner", { method: "DELETE" });
+      toast("Баннер убран");
+      loadBannerState();
+    } catch (e) { toast(e.message, "err"); }
+  });
+  $("banner").addEventListener("change", () =>
+    restyle({ banner: $("banner").checked }, "Перерендер клипов: баннер"));
+  loadBannerState();
   $("endCard").addEventListener("change", () =>
     restyle({ end_card: $("endCard").checked }, "Перерендер клипов: концовка"));
   $("endText").addEventListener("change", () =>
@@ -1173,6 +1257,7 @@
     $("encoder").value = o.encoder || "auto";
     $("bitrate").value = o.bitrate || "auto";
     $("endCard").checked = !!o.end_card;
+    $("banner").checked = !!o.banner;
     $("endText").value = o.end_text || "Подпишись";
     $("socialBadge").checked = !!o.social_badge;
     $("socialPos").value = o.social_pos || "top";

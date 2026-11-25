@@ -261,6 +261,13 @@
                   </select>
                 </label>
                 <label class="switch-row"><span>Заглушить и скрыть мат (звук и буквы)</span><input type="checkbox" id="censor" class="switch"></label>
+                <label class="switch-row"><span>Баннер посреди клипа (кадр стоит, затем видео дальше)</span><input type="checkbox" id="banner" class="switch"></label>
+                <div class="banner-row">
+                  <button class="btn btn-ghost btn-sm" id="bannerBtn" type="button">Загрузить баннер</button>
+                  <button class="btn btn-ghost btn-sm" id="bannerClear" type="button">Убрать</button>
+                  <span class="trim-lbl" id="bannerState">Баннер не загружен</span>
+                  <input type="file" id="bannerFile" accept="image/png,image/jpeg" hidden>
+                </div>
                 <label class="switch-row"><span>Концовка 3 с с призывом подписаться</span><input type="checkbox" id="endCard" class="switch"></label>
                 <input id="endText" class="input input-sm" maxlength="40" placeholder="Подпишись" autocomplete="off">
                 <label class="switch-row"><span>Ник и значки площадок в кадре</span><input type="checkbox" id="socialBadge" class="switch"></label>
@@ -360,6 +367,35 @@
                 <div class="trim-btns">
                   <button class="btn btn-ghost btn-sm" id="trimApply" disabled>Применить</button>
                   <button class="btn btn-ghost btn-sm" id="trimReset" disabled>Сбросить</button>
+                </div>
+                <div class="look-box" id="lookBox">
+                  <div class="card-title small">Постановка клипа</div>
+                  <div class="seg" id="lookLayout" role="radiogroup" aria-label="Вебка в клипе">
+                    <button class="seg-btn" data-look-layout="game">Без вебки</button>
+                    <button class="seg-btn" data-look-layout="webcam_bottom">Вебка снизу</button>
+                    <button class="seg-btn" data-look-layout="webcam_top">Вебка сверху</button>
+                  </div>
+                  <div class="pair" id="lookCamRow">
+                    <label class="field"><span>Угол вебки</span>
+                      <select id="lookCorner"><option value="br">справа снизу</option><option value="bl">слева снизу</option><option value="tr">справа сверху</option><option value="tl">слева сверху</option></select></label>
+                    <label class="field"><span>Размер вебки <b id="lookCamSizeVal">25</b>%</span>
+                      <input type="range" id="lookCamSize" class="range" min="10" max="40" step="1" value="25"></label>
+                  </div>
+                  <label class="field"><span>Сдвиг кадра по горизонтали <b id="lookPanXVal">50</b></span>
+                    <input type="range" id="lookPanX" class="range" min="0" max="100" step="1" value="50"></label>
+                  <label class="field"><span>Сдвиг кадра по вертикали <b id="lookPanYVal">50</b></span>
+                    <input type="range" id="lookPanY" class="range" min="0" max="100" step="1" value="50"></label>
+                  <label class="field"><span>Приближение <b id="lookZoomVal">0</b>%</span>
+                    <input type="range" id="lookZoom" class="range" min="0" max="50" step="1" value="0"></label>
+                  <label class="field"><span>Блюр фона (режим «Вписать с фоном») <b id="lookBlurVal">40</b></span>
+                    <input type="range" id="lookBlur" class="range" min="5" max="60" step="1" value="40"></label>
+                  <label class="field"><span>Размер субтитров <b id="lookSubScaleVal">100</b>%</span>
+                    <input type="range" id="lookSubScale" class="range" min="50" max="200" step="5" value="100"></label>
+                  <div class="trim-btns">
+                    <button class="btn btn-ghost btn-sm" id="lookReset" disabled>Сбросить постановку</button>
+                    <button class="btn btn-sm" id="lookRebuild" disabled>Пересобрать клип</button>
+                  </div>
+                  <div class="trim-lbl">Сдвиг и зум меняют кадр вместо распознавания лица; «Вписать с фоном» не использует сдвиг.</div>
                 </div>
                 <div class="timeline-wrap">
                   <div class="card-title small" id="timelineTitle">Сила момента · клик по шкале — точка для нового клипа</div>

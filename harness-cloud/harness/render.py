@@ -43,13 +43,16 @@ def _webcam_box(corner: str, size_pct: float) -> tuple[str, str, str, str]:
     return f"iw*{w:.4f}", f"iw*{w * 0.75:.4f}", x, y
 
 
-def _split_chain(layout: str, corner: str, size_pct: float, out_w: int, out_h: int, fps: int) -> str:
+def _split_chain(layout: str, corner: str, size_pct: float, out_w: int, out_h: int, fps: int,
+                 look: dict | None = None) -> str:
     """Игра и вебка в одном кадре: игра по центру исходника, вебка — из угла исходника."""
     cam_h = webcam_zone_h(out_h)
     game_h = out_h - cam_h
     cw, ch, cx, cy = _webcam_box(corner, size_pct)
+    game_crop = (_crop_expr(out_w / game_h, look) if look is not None
+                 else f"crop=ih*{out_w}/{game_h}:ih:(iw-ih*{out_w}/{game_h})/2:0")
     game = (f"[0:v]split=2[gsrc][csrc];"
-            f"[gsrc]crop=ih*{out_w}/{game_h}:ih:(iw-ih*{out_w}/{game_h})/2:0,"
+            f"[gsrc]{game_crop},"
             f"scale={out_w}:{game_h}:flags=lanczos[gfg];")
     cam = (f"[csrc]crop={cw}:{ch}:{cx}:{cy},"
            f"scale={out_w}:{cam_h}:force_original_aspect_ratio=increase:flags=lanczos,"
@@ -67,20 +70,43 @@ def resolve_layout(layout: str, clip_index: int) -> str:
     return "game"
 
 
+DEFAULT_LOOK = {"pan_x": 50, "pan_y": 50, "zoom": 0, "blur": 40}
+
+
+def _manual_crop(look: dict | None) -> bool:
+    """Ручной кадр (сдвиг или зум) заменяет распознавание лица; по умолчанию — нет."""
+    return bool(look) and (look.get("pan_x", 50) != 50 or look.get("pan_y", 50) != 50
+                           or look.get("zoom", 0) != 0)
+
+
+def _crop_expr(aspect: float, look: dict) -> str:
+    """Кроп нужного соотношения сторон с зумом и сдвигом. Сдвиг 0..100 — позиция окна в исходнике.
+    zoom 0..50 — доля, на которую окно уменьшается по высоте (50 → окно в 0.75 высоты)."""
+    z = 1 - max(0, min(50, look.get("zoom", 0))) / 100 * 0.5
+    px = max(0, min(100, look.get("pan_x", 50))) / 100
+    py = max(0, min(100, look.get("pan_y", 50))) / 100
+    w = f"min(iw,ih*{aspect:.5f}*{z:.4f})"
+    return f"crop=w='{w}':h='ih*{z:.4f}':x='(iw-{w})*{px:.4f}':y='(ih-ih*{z:.4f})*{py:.4f}'"
+
+
 def _framing_chain(plan: CropPlan | None, framing: str, src_w: int, src_h: int,
                    out_w: int = config.OUT_W, out_h: int = config.OUT_H, fps: int = config.DEFAULT_FPS,
-                   layout: str = "game", corner: str = "br", size_pct: float = 25.0) -> str:
+                   layout: str = "game", corner: str = "br", size_pct: float = 25.0,
+                   look: dict | None = None) -> str:
     """Фильтрграф от [0:v] до [v0]: нужный формат кадра (out_w×out_h), 30 fps, yuv420p."""
     if layout in WEBCAM_LAYOUTS and split_supported(out_w, out_h):
-        return _split_chain(layout, corner, size_pct, out_w, out_h, fps)
+        return _split_chain(layout, corner, size_pct, out_w, out_h, fps, look)
+    blur = int(look.get("blur", 40)) if look else 40
     if framing == "fit":
         # Фон — тот же кадр, растянутый на весь кадр и размытый; поверх — исходник целиком.
         return (f"[0:v]split=2[fa][fb];"
                 f"[fa]scale={out_w}:{out_h}:force_original_aspect_ratio=increase,"
-                f"crop={out_w}:{out_h},boxblur=luma_radius=40:luma_power=2[bg];"
+                f"crop={out_w}:{out_h},boxblur=luma_radius={blur}:luma_power=2[bg];"
                 f"[fb]scale={out_w}:{out_h}:force_original_aspect_ratio=decrease[fg];"
                 f"[bg][fg]overlay=(W-w)/2:(H-h)/2,fps={fps},format=yuv420p[v0]")
-    if plan is not None:
+    if look is not None and _manual_crop(look):
+        crop = _crop_expr(out_w / out_h, look)
+    elif plan is not None:
         x = ffmpeg_crop_expr(plan.keys, 1)
         y = ffmpeg_crop_expr(plan.keys, 2)
         crop = f"crop={plan.crop_w}:{plan.crop_h}:'{x}':'{y}'"
@@ -240,11 +266,13 @@ def render_clip(src: Path, start: float, duration: float, plan: CropPlan | None,
                 out_w: int = config.OUT_W, out_h: int = config.OUT_H, fps: int = config.DEFAULT_FPS,
                 layout: str = "game", corner: str = "br", size_pct: float = 25.0,
                 mutes: list | None = None, encoder: str = "cpu", bitrate: str | None = None,
-                badge: Path | None = None, badge_pos: str = "top") -> dict:
+                badge: Path | None = None, badge_pos: str = "top",
+                look: dict | None = None) -> dict:
     """Один непрерывный отрезок. ass_file кладётся рядом с out (cwd), поэтому путь короткий.
     badge — PNG со значками и ником (см. badge.py), накладывается под субтитрами."""
     out.parent.mkdir(parents=True, exist_ok=True)
-    chain = _framing_chain(plan, framing, src_w, src_h, out_w, out_h, fps, layout, corner, size_pct)
+    chain = _framing_chain(plan, framing, src_w, src_h, out_w, out_h, fps, layout, corner, size_pct,
+                           look)
     extra, label = _badge_filter("[v0]", 1, badge_pos) if badge is not None else ("", "[v0]")
     chain = chain[:-len("[v0]")] + "[v0]" + extra
     if ass_file is not None:
@@ -267,7 +295,8 @@ def render_segments(src: Path, segments: list[tuple[float, float]], plans: list[
                     out_w: int = config.OUT_W, out_h: int = config.OUT_H, fps: int = config.DEFAULT_FPS,
                     layout: str = "game", corner: str = "br", size_pct: float = 25.0,
                     mutes: list | None = None, encoder: str = "cpu", bitrate: str | None = None,
-                    badge: Path | None = None, badge_pos: str = "top") -> dict:
+                    badge: Path | None = None, badge_pos: str = "top",
+                    look: dict | None = None) -> dict:
     """Несколько отрезков: каждый рендерится в промежуточный файл, затем склейка и субтитры."""
     work = out.parent / "parts"
     work.mkdir(parents=True, exist_ok=True)
@@ -275,7 +304,7 @@ def render_segments(src: Path, segments: list[tuple[float, float]], plans: list[
     for i, ((s, e), plan) in enumerate(zip(segments, plans)):
         part = work / f"part_{i}.mp4"
         chain = _framing_chain(plan, framing, src_w, src_h, out_w, out_h, fps, layout, corner,
-                               size_pct)[:-len("[v0]")] + "[v]"
+                               size_pct, look)[:-len("[v0]")] + "[v]"
         cmd = [tools.ffmpeg_bin(), "-y", "-v", "error",
                "-ss", f"{s:.3f}", "-i", str(src), "-t", f"{e - s:.3f}",
                "-filter_complex", chain, "-map", "[v]", "-map", "0:a?",

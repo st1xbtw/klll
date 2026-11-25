@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 APP_NAME = "Harness Cloud"
-APP_VERSION = "2.4.0"
+APP_VERSION = "2.5.0"
 
 # Выходной формат клипов (спецификация).
 OUT_W = 1080
@@ -168,6 +168,7 @@ DATA_DIR = _data_dir()
 PROJECTS_DIR = DATA_DIR / "projects"
 WHISPER_DIR = DATA_DIR / "whisper"
 SETTINGS_FILE = DATA_DIR / "settings.json"
+BANNER_FILE = DATA_DIR / "banner.png"       # картинка баннера в середине клипа (см. banner.py)
 CALIBRATION_FILE = DATA_DIR / "calibration.json"
 
 

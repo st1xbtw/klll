@@ -192,7 +192,7 @@ def build_ass(words: list[dict], clip_len: float, hook_text: str | None,
               out_w: int = config.OUT_W, out_h: int = config.OUT_H,
               watermark: str | None = None, font: str | None = None, group_size: int = 0,
               pos: tuple[float, float] | None = None, effect: str = "none",
-              place: str = config.DEFAULT_SUB_PLACE) -> Path:
+              place: str = config.DEFAULT_SUB_PLACE, scale: int = 100) -> Path:
     """Строит ASS-файл субтитров, хука и водяного знака.
 
     words: слова клипа с временами в секундах от начала клипа.
@@ -225,7 +225,7 @@ def build_ass(words: list[dict], clip_len: float, hook_text: str | None,
         "Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, "
         "Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
         # Подложка: непрозрачный бокс (BorderStyle 3) полупрозрачного чёрного цвета.
-        _style_line("Sub", family, style["size"], style["highlight"], style["base"],
+        _style_line("Sub", family, max(1, round(style["size"] * max(50, min(200, scale)) / 100)), style["highlight"], style["base"],
                     "&HA0000000&" if box else style["outline"], "&H66000000&",
                     3 if box else 1, 20 if box else style["outline_w"],
                     0 if box else style["shadow"], sub_align, bottom_m, bold=-1),

@@ -14,7 +14,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import audio, badge as badge_mod, censor, config, encoders, faces, fonts, ingest, render, scoring, segments as sg, storage, subtitles, text_ai, tools, transcribe
+from . import audio, badge as badge_mod, banner as banner_mod, censor, config, encoders, faces, fonts, ingest, render, scoring, segments as sg, storage, subtitles, text_ai, tools, transcribe
 from .tools import StepCancelled, ToolError
 
 STEPS = ["source", "audio", "transcribe", "analyze", "clips"]
@@ -114,7 +114,22 @@ def _clip_dict(proj: dict, rank: int, segs: list, pct, reason: str, parts, origi
         # Ник и значки площадок в кадре (как субтитры).
         "social_badge": bool(opts.get("social_badge")), "social_pos": opts.get("social_pos", "top"),
         "socials": opts.get("socials") or {},
+        # Ручная постановка клипа: сдвиг кадра, зум, сила блюра, размер субтитров (см. /look).
+        "pan_x": 50, "pan_y": 50, "zoom": 0, "blur": 40, "sub_scale": 100,
+        # Баннер в середине клипа: картинка из настроек, точка вставки — доля длительности.
+        "banner": bool(opts.get("banner")), "banner_at": float(opts.get("banner_at") or 0.5),
     }
+
+
+def look_of(clip: dict) -> dict:
+    """Ручная постановка клипа для рендера; значения приведены к допустимым границам."""
+    def num(key: str, lo: int, hi: int, default: int) -> int:
+        try:
+            return max(lo, min(hi, int(round(float(clip.get(key, default))))))
+        except (TypeError, ValueError):
+            return default
+    return {"pan_x": num("pan_x", 0, 100, 50), "pan_y": num("pan_y", 0, 100, 50),
+            "zoom": num("zoom", 0, 50, 0), "blur": num("blur", 5, 60, 40)}
 
 
 def run(pid: str, cancel: threading.Event, retry: bool = False) -> dict:
@@ -361,7 +376,8 @@ def _render_one(proj: dict, clip: dict, src: Path, d: Path, words, segments, pre
             emoji=bool(clip.get("sub_emoji")), out_w=out_w, out_h=out_h,
             watermark=watermark or None, font=family, pos=pos, effect=effect,
             place=clip.get("sub_place") or config.DEFAULT_SUB_PLACE,
-            group_size=int(clip.get("sub_group") or 0))
+            group_size=int(clip.get("sub_group") or 0),
+            scale=int(clip.get("sub_scale") or 100))
     out = cdir / "clip.mp4"
     badge = None
     if clip.get("social_badge"):
@@ -371,7 +387,8 @@ def _render_one(proj: dict, clip: dict, src: Path, d: Path, words, segments, pre
                        corner=clip.get("webcam_corner") or "br",
                        size_pct=float(clip.get("webcam_size") or 25), mutes=mutes,
                        encoder=encoder, bitrate=bitrate,
-                       badge=badge, badge_pos=clip.get("social_pos") or "top")
+                       badge=badge, badge_pos=clip.get("social_pos") or "top",
+                       look=look_of(clip))
     if len(segs) == 1:
         t0 = time.time()
         res = render.render_clip(src, start, dur, plans[0], ass, out, preset, cancel,
@@ -381,6 +398,15 @@ def _render_one(proj: dict, clip: dict, src: Path, d: Path, words, segments, pre
                                      proj["src_w"], proj["src_h"], ass, out, preset, cancel, **opts_render)
     if len(segs) == 1:
         note_render_speed(out_w * out_h * fps * dur, time.time() - t0)
+    if clip.get("banner") and config.BANNER_FILE.exists() and dur >= banner_mod.MIN_CLIP:
+        # Баннер вставляется в готовый клип: стоп-кадр с субтитрами и значками, затем продолжение.
+        bclip = cdir / "clip_banner.mp4"
+        banner_mod.add_banner(out, config.BANNER_FILE, bclip, dur, out_w, out_h, fps, cancel,
+                              fraction=float(clip.get("banner_at") or 0.5), encoder=encoder,
+                              bitrate=bitrate)
+        bclip.replace(out)
+        dur = dur + banner_mod.BANNER_SEC
+        res = render.verify(out, out_w, out_h, fps, expected=dur)
     if clip.get("end_card"):
         lines = [clip.get("end_text") or "Подпишись"]
         if clip.get("nickname"):
