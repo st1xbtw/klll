@@ -13,7 +13,7 @@ from fastapi import Body, FastAPI, File, Form, HTTPException, Request, UploadFil
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import clipedit, config, encoders, fonts, ingest, live, notify as notify_mod, pipeline, render, storage, tools, segments as sg
+from . import banner as banner_mod, clipedit, config, encoders, fonts, ingest, live, notify as notify_mod, pipeline, render, storage, tools, segments as sg
 from .jobs import JobManager
 
 DEFAULT_SETTINGS = {"theme": "dark", "clip_count": 8, "clip_length": 30, "subtitle_style": config.DEFAULT_SUBTITLE_STYLE,
@@ -173,6 +173,13 @@ def _ranged_file(path: Path, request: Request, media: str) -> Response:
         "Content-Length": str(len(data))})
 
 
+def _clear_banner() -> None:
+    """Удаляет прежний баннер любого типа, чтобы в папке данных оставался один файл."""
+    for path in config.DATA_DIR.glob("banner.*"):
+        if path.suffix.lower() in banner_mod.VIDEO_EXT + banner_mod.IMAGE_EXT:
+            path.unlink(missing_ok=True)
+
+
 def create_app(jobs: JobManager | None = None) -> FastAPI:
     app = FastAPI(title=config.APP_NAME, version=config.APP_VERSION)
     holder = {"jobs": jobs or JobManager()}
@@ -201,32 +208,53 @@ def create_app(jobs: JobManager | None = None) -> FastAPI:
 
     @app.get("/api/banner")
     async def banner_state():
-        return {"exists": config.BANNER_FILE.exists()}
+        path = banner_mod.current_banner()
+        if path is None:
+            return {"exists": False}
+        if banner_mod.is_video(path):
+            info = banner_mod.probe(path)
+            return {"exists": True, "kind": "video", "duration": round(info["duration"], 2)}
+        return {"exists": True, "kind": "image"}
 
     @app.post("/api/banner")
     async def upload_banner(file: UploadFile = File(...)):
-        """Картинка баннера для середины клипа: сохраняется как PNG, ширина подгоняется при рендере."""
-        from PIL import Image
+        """Баннер посреди клипа: картинка (PNG/JPG) или видео (MP4/MOV/WEBM/MKV). Заменяет прежний."""
+        suffix = Path(file.filename or "banner").suffix.lower()
+        if suffix not in banner_mod.IMAGE_EXT + banner_mod.VIDEO_EXT:
+            raise HTTPException(400, "Баннер: картинка PNG/JPG или видео MP4/MOV/WEBM/MKV")
         tmp = Path(tempfile.mkdtemp(prefix="banner-")) / "upload"
         try:
             with open(tmp, "wb") as fh:
                 shutil.copyfileobj(file.file, fh, length=1024 * 1024)
+            if suffix in banner_mod.VIDEO_EXT:
+                try:
+                    info = banner_mod.probe(tmp)
+                except tools.ToolError as exc:
+                    raise HTTPException(400, str(exc))
+                if not info["video"] or info["duration"] <= 0:
+                    raise HTTPException(400, "В файле нет видеодорожки")
+                target = config.DATA_DIR / f"banner{suffix}"
+                _clear_banner()
+                shutil.move(str(tmp), target)
+                return {"ok": True, "kind": "video", "duration": round(info["duration"], 2)}
+            from PIL import Image
             try:
                 im = Image.open(tmp)
                 im.load()
                 im = im.convert("RGBA")
             except Exception:
-                raise HTTPException(400, "Нужна картинка PNG или JPG")
+                raise HTTPException(400, "Не удалось открыть картинку")
             if im.width < 200 or im.height < 60:
                 raise HTTPException(400, "Баннер слишком маленький: нужно не меньше 200×60 пикселей")
-            im.save(config.BANNER_FILE, "PNG")
-            return {"ok": True, "size": [im.width, im.height]}
+            _clear_banner()
+            im.save(config.DATA_DIR / "banner.png", "PNG")
+            return {"ok": True, "kind": "image", "size": [im.width, im.height]}
         finally:
             shutil.rmtree(tmp.parent, ignore_errors=True)
 
     @app.delete("/api/banner")
     async def remove_banner():
-        config.BANNER_FILE.unlink(missing_ok=True)
+        _clear_banner()
         return {"ok": True, "exists": False}
 
     @app.post("/api/fonts")

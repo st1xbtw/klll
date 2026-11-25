@@ -168,7 +168,6 @@ DATA_DIR = _data_dir()
 PROJECTS_DIR = DATA_DIR / "projects"
 WHISPER_DIR = DATA_DIR / "whisper"
 SETTINGS_FILE = DATA_DIR / "settings.json"
-BANNER_FILE = DATA_DIR / "banner.png"       # картинка баннера в середине клипа (см. banner.py)
 CALIBRATION_FILE = DATA_DIR / "calibration.json"
 
 

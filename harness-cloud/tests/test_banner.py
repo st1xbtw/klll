@@ -39,8 +39,8 @@ def test_banner_render_adds_three_seconds_and_holds_the_frame(tmp_path):
     subprocess.run([tools.ffmpeg_bin(), "-y", "-v", "error", "-f", "lavfi", "-i",
                     "color=c=0x2a1030:size=800x400:d=1", "-frames:v", "1", str(png)], check=True)
     out = tmp_path / "out.mp4"
-    at = banner.add_banner(src, png, out, 10.0, 1080, 1920, 30, threading.Event())
-    assert at == 5.0
+    res = banner.add_banner(src, png, out, 10.0, 1080, 1920, 30, threading.Event())
+    assert res["at"] == 5.0 and res["hold"] == 3.0
 
     result = subprocess.run([tools.ffprobe_bin(), "-v", "error", "-show_entries", "format=duration", "-of",
                              "default=nw=1:nk=1", str(out)], capture_output=True, text=True)
@@ -64,7 +64,7 @@ def test_banner_render_adds_three_seconds_and_holds_the_frame(tmp_path):
 
 
 def test_banner_upload_rejects_non_images_and_saves_png(tmp_path, monkeypatch):
-    monkeypatch.setattr(config, "BANNER_FILE", tmp_path / "banner.png")
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path)
 
     class _Jobs:
         def submit(self, *a, **k):
@@ -84,9 +84,51 @@ def test_banner_upload_rejects_non_images_and_saves_png(tmp_path, monkeypatch):
     Image.new("RGB", (400, 120), (42, 16, 48)).save(src)
     ok = client.post("/api/banner", files={"file": ("b.png", src.read_bytes(), "image/png")})
     assert ok.status_code == 200 and ok.json()["size"] == [400, 120]
-    assert client.get("/api/banner").json() == {"exists": True}
+    assert client.get("/api/banner").json()["exists"] is True
     client.delete("/api/banner")
     assert client.get("/api/banner").json() == {"exists": False}
+
+
+def test_video_banner_plays_whole_and_extends_clip(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path / "data")
+    (tmp_path / "data").mkdir()
+    video = tmp_path / "promo.mp4"
+    subprocess.run([tools.ffmpeg_bin(), "-y", "-v", "error", "-f", "lavfi", "-i",
+                    "testsrc=size=640x360:rate=30:duration=4", "-f", "lavfi", "-i",
+                    "sine=frequency=880:duration=4", "-shortest", "-c:v", "libx264",
+                    "-pix_fmt", "yuv420p", "-c:a", "aac", str(video)], check=True)
+
+    class _Jobs:
+        def submit(self, *a, **k):
+            pass
+
+        def cancel(self, pid):
+            return False
+
+        def queued(self):
+            return []
+
+    client = TestClient(server.create_app(jobs=_Jobs()))
+    up = client.post("/api/banner", files={"file": ("promo.mp4", video.read_bytes(), "video/mp4")})
+    assert up.status_code == 200 and up.json()["kind"] == "video"
+    state = client.get("/api/banner").json()
+    assert state["kind"] == "video" and abs(state["duration"] - 4.0) < 0.2
+
+    src = tmp_path / "clip.mp4"
+    subprocess.run([tools.ffmpeg_bin(), "-y", "-v", "error", "-f", "lavfi", "-i",
+                    "testsrc=size=1080x1920:rate=30:duration=10", "-f", "lavfi", "-i",
+                    "sine=frequency=330:duration=10", "-shortest", "-c:v", "libx264",
+                    "-pix_fmt", "yuv420p", "-c:a", "aac", str(src)], check=True)
+    out = tmp_path / "out.mp4"
+    res = banner.add_banner(src, banner.current_banner(), out, 10.0, 1080, 1920, 30,
+                            threading.Event(), banner_sec=99)
+    assert abs(res["hold"] - 4.0) < 0.1  # длительность берётся из видео, а не из поля секунд
+    probed = subprocess.run([tools.ffprobe_bin(), "-v", "error", "-show_entries", "format=duration",
+                             "-of", "default=nw=1:nk=1", str(out)], capture_output=True, text=True)
+    assert abs(float(probed.stdout.strip()) - 14.0) < 0.2
+
+    bad = client.post("/api/banner", files={"file": ("x.txt", b"hi", "text/plain")})
+    assert bad.status_code == 400
 
 
 def test_banner_duration_is_any_value_within_limits():

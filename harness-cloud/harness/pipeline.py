@@ -399,15 +399,16 @@ def _render_one(proj: dict, clip: dict, src: Path, d: Path, words, segments, pre
                                      proj["src_w"], proj["src_h"], ass, out, preset, cancel, **opts_render)
     if len(segs) == 1:
         note_render_speed(out_w * out_h * fps * dur, time.time() - t0)
-    if clip.get("banner") and config.BANNER_FILE.exists() and dur >= banner_mod.MIN_CLIP:
+    bpath = banner_mod.current_banner() if clip.get("banner") else None
+    if bpath is not None and dur >= banner_mod.MIN_CLIP:
         # Баннер вставляется в готовый клип: стоп-кадр с субтитрами и значками, затем продолжение.
         bclip = cdir / "clip_banner.mp4"
-        banner_mod.add_banner(out, config.BANNER_FILE, bclip, dur, out_w, out_h, fps, cancel,
-                              fraction=float(clip.get("banner_at") or 0.5),
-                              banner_sec=banner_mod.clamp_banner_sec(clip.get("banner_sec")),
-                              encoder=encoder, bitrate=bitrate)
+        added = banner_mod.add_banner(out, bpath, bclip, dur, out_w, out_h, fps, cancel,
+                                      fraction=float(clip.get("banner_at") or 0.5),
+                                      banner_sec=banner_mod.clamp_banner_sec(clip.get("banner_sec")),
+                                      encoder=encoder, bitrate=bitrate)
         bclip.replace(out)
-        dur = dur + banner_mod.clamp_banner_sec(clip.get("banner_sec"))
+        dur = dur + added["hold"]
         res = render.verify(out, out_w, out_h, fps, expected=dur)
     if clip.get("end_card"):
         lines = [clip.get("end_text") or "Подпишись"]

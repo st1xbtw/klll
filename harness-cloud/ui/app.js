@@ -1028,7 +1028,9 @@
   async function loadBannerState() {
     try {
       const r = await api("/api/banner");
-      $("bannerState").textContent = r.exists ? "Баннер загружен: вставится в середину клипа" : "Баннер не загружен";
+      if (!r.exists) $("bannerState").textContent = "Баннер не загружен";
+      else if (r.kind === "video") $("bannerState").textContent = `Видео-баннер ${Math.round(r.duration)} с: сыграет целиком в середине клипа`;
+      else $("bannerState").textContent = "Картинка-баннер: стоит заданное число секунд";
       $("bannerClear").disabled = !r.exists;
     } catch (e) { /* без баннера интерфейс работает как раньше */ }
   }
