@@ -2,6 +2,7 @@ name: Build Emoji Studio installer (Windows)
 
 on:
   push:
+    branches: ["add-emoji-studio"]
     tags: ["v*"]
     paths: ["emoji-studio/**", ".github/workflows/build-emoji-studio.yml"]
   workflow_dispatch:
