@@ -327,7 +327,7 @@ def main() -> None:
     except Exception:  # noqa: BLE001 — нет webview: откроем в браузере
         webview = None
     if webview is None:
-        print(f"Emoji Studio запущен: {url}\nДля выхода нажмите Ctrl+C.")
+        print(f"Lunary Emoji запущен: {url}\nДля выхода нажмите Ctrl+C.")
         threading.Timer(0.8, lambda: webbrowser.open(url)).start()
         try:
             server.serve_forever()
@@ -338,7 +338,7 @@ def main() -> None:
         return
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
-        WINDOW_API.window = webview.create_window("Emoji Studio", url, width=1280, height=820,
+        WINDOW_API.window = webview.create_window("Lunary Emoji", url, width=1280, height=820,
                                                   min_size=(980, 640), background_color="#0b0a12",
                                                   js_api=WINDOW_API)
         webview.start()

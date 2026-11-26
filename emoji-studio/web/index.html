@@ -3,174 +3,197 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Emoji Studio</title>
+<title>Lunary Emoji</title>
 <link rel="icon" href="/assets/lunary_logo.png">
 <style>
 :root {
-  --bg1: #0a1a4f; --bg2: #1b3fd1; --bg3: #0b0f2e;
-  --glass: rgba(40, 70, 170, .28); --glass-strong: rgba(30, 55, 150, .42);
-  --line: rgba(160, 190, 255, .22); --text: #eef3ff; --muted: #a9bde8;
-  --accent: #4f8bff; --accent2: #7b5cff; --ok: #3ddc97; --warn: #ffb020; --err: #ff6b7a;
-  --field: rgba(10, 22, 70, .55); --tile: rgba(20, 40, 120, .45);
+  --text: #ffffff; --muted: #b8c8f2; --accent: #3d8bff; --accent2: #6d5bff;
+  --ok: #3fe09a; --warn: #ffbf3a; --err: #ff6d7d;
+  --glass: rgba(42, 78, 190, .34); --glass2: rgba(30, 60, 170, .5);
+  --line: rgba(170, 205, 255, .28); --field: rgba(8, 20, 80, .45); --tile: rgba(20, 45, 140, .5);
+  --shadow: 0 14px 50px rgba(0, 10, 60, .45);
 }
 [data-theme="light"] {
-  --bg1: #dfe9ff; --bg2: #b9ceff; --bg3: #f4f7ff;
-  --glass: rgba(255, 255, 255, .55); --glass-strong: rgba(255, 255, 255, .75);
-  --line: rgba(60, 90, 180, .18); --text: #0e1a45; --muted: #4a5f97;
-  --field: rgba(255, 255, 255, .8); --tile: rgba(255, 255, 255, .7);
+  --text: #0d1a4a; --muted: #46598f; --accent: #2f7bff; --accent2: #6b55ff;
+  --glass: rgba(255, 255, 255, .6); --glass2: rgba(255, 255, 255, .78);
+  --line: rgba(70, 110, 210, .22); --field: rgba(255, 255, 255, .85); --tile: rgba(255, 255, 255, .8);
+  --shadow: 0 14px 40px rgba(40, 70, 170, .2);
 }
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
 body {
-  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
-  color: var(--text); overflow: hidden;
+  font-family: "Segoe UI", "Inter", system-ui, sans-serif; color: var(--text); overflow: hidden;
   background:
-    radial-gradient(900px 500px at 15% 0%, var(--bg2) 0%, transparent 60%),
-    radial-gradient(800px 600px at 100% 100%, #3a2bb8 0%, transparent 55%),
-    linear-gradient(160deg, var(--bg1), var(--bg3));
+    radial-gradient(1000px 600px at 50% 12%, #2b63ff 0%, transparent 60%),
+    radial-gradient(800px 500px at 0% 90%, #1f5cff 0%, transparent 60%),
+    radial-gradient(700px 500px at 100% 100%, #3c2fd6 0%, transparent 60%),
+    linear-gradient(180deg, #0a2170 0%, #0d2aa0 55%, #0a1f78 100%);
 }
-button, input, select { font: inherit; color: inherit; }
+[data-theme="light"] body {
+  background: radial-gradient(900px 600px at 50% 10%, #cfe0ff, transparent 60%), linear-gradient(180deg, #e7efff, #bcd1ff);
+}
+button, input { font: inherit; color: inherit; }
 button { cursor: pointer; }
 .hidden { display: none !important; }
-
-.app { height: 100vh; display: grid; grid-template-columns: 250px 1fr 340px; grid-template-rows: auto 1fr auto; gap: 16px; padding: 16px; }
 .glass {
-  background: var(--glass); border: 1px solid var(--line); border-radius: 22px;
-  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-  box-shadow: 0 10px 40px rgba(0, 0, 40, .25);
+  background: var(--glass); border: 1px solid var(--line); border-radius: 26px;
+  backdrop-filter: blur(18px) saturate(140%); -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow: var(--shadow);
+}
+
+.app {
+  height: 100vh; display: grid; gap: 18px; padding: 18px 22px 16px;
+  grid-template-columns: 250px minmax(0, 1fr) 360px;
+  grid-template-rows: 84px minmax(0, 1fr) 62px;
 }
 
 /* шапка */
-.brand { grid-column: 1; grid-row: 1; display: flex; align-items: center; gap: 12px; padding: 10px 16px; height: 76px; }
-.brand img { width: 58px; height: 52px; object-fit: contain; }
-.brand b { font-size: 20px; display: block; }
+.brand { grid-column: 1; grid-row: 1; display: flex; align-items: center; gap: 14px; padding: 0 18px; }
+.brand img { width: 56px; height: 48px; object-fit: contain; flex: none; }
+.brand b { font-size: 22px; font-weight: 700; display: block; letter-spacing: .2px; }
 .brand small { color: var(--muted); font-size: 13px; }
-.topbar { grid-column: 2 / 4; grid-row: 1; display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 10px 14px; height: 76px; }
-.pill { display: inline-flex; border-radius: 999px; background: var(--glass-strong); padding: 4px; gap: 4px; border: 1px solid var(--line); }
-.pill button, .winbtn {
-  width: 40px; height: 40px; border-radius: 999px; border: 0; background: transparent;
-  display: grid; place-items: center; font-size: 18px; color: var(--text);
+.topbar { grid-column: 2 / 4; grid-row: 1; display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding: 0 16px; }
+.themepill, .winbar { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; background: var(--glass2); border: 1px solid var(--line); padding: 5px; }
+.themepill button, .winbar button {
+  width: 42px; height: 40px; border: 0; border-radius: 999px; background: transparent; display: grid; place-items: center; font-size: 19px; color: var(--text);
 }
-.pill button.active { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; box-shadow: 0 0 18px rgba(79, 139, 255, .6); }
-.winbtn:hover { background: rgba(255, 255, 255, .12); }
-.winbtn.close:hover { background: var(--err); color: #fff; }
+.themepill button.active { background: linear-gradient(135deg, #5aa2ff, #3d6dff); color: #fff; box-shadow: 0 0 20px rgba(80, 150, 255, .7); }
+.winbar button:hover { background: rgba(255, 255, 255, .14); }
+.winbar button.close:hover { background: #e5485d; color: #fff; }
 
 /* боковая панель */
-.side { grid-column: 1; grid-row: 2; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.side { grid-column: 1; grid-row: 2; padding: 22px 16px 16px; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
 .nav button {
-  width: 100%; display: flex; align-items: center; gap: 12px; padding: 13px 14px; border-radius: 16px;
-  background: transparent; border: 1px solid transparent; color: var(--text); font-size: 15px; text-align: left;
+  width: 100%; height: 56px; display: flex; align-items: center; gap: 14px; padding: 0 16px; border-radius: 18px;
+  background: transparent; border: 1px solid transparent; color: var(--text); font-size: 16px; text-align: left;
 }
-.nav button .ic { width: 26px; text-align: center; font-size: 18px; }
+.nav button .ic { width: 26px; text-align: center; font-size: 20px; opacity: .95; }
 .nav button:hover { background: rgba(255, 255, 255, .08); }
-.nav button.active { background: linear-gradient(135deg, rgba(79, 139, 255, .55), rgba(123, 92, 255, .45)); border-color: rgba(160, 200, 255, .45); box-shadow: 0 0 22px rgba(79, 139, 255, .35); }
+.nav button.active {
+  background: linear-gradient(135deg, rgba(74, 140, 255, .85), rgba(92, 96, 255, .75));
+  border-color: rgba(190, 220, 255, .55); box-shadow: 0 0 26px rgba(70, 140, 255, .55);
+}
 .side .grow { flex: 1; }
-.botcard { border: 1px solid var(--line); border-radius: 18px; padding: 12px; background: var(--glass-strong); display: flex; gap: 10px; align-items: center; }
-.botcard .tg { width: 42px; height: 42px; border-radius: 50%; background: #2aa3ef; display: grid; place-items: center; color: #fff; font-size: 20px; flex: none; }
-.botcard small { color: var(--muted); display: block; }
-.botcard a { color: var(--text); text-decoration: none; font-size: 14px; }
+.botcard {
+  border-radius: 20px; padding: 12px 14px; background: var(--glass2); border: 1px solid var(--line);
+  display: flex; align-items: center; gap: 12px; text-decoration: none; color: var(--text);
+}
+.botcard .tg { width: 46px; height: 46px; border-radius: 50%; background: linear-gradient(180deg, #37b5ff, #1a8ff0); display: grid; place-items: center; color: #fff; font-size: 22px; flex: none; }
+.botcard b { display: block; font-size: 15px; }
+.botcard small { color: var(--muted); font-size: 13px; }
 
 /* центр */
-.main { grid-column: 2; grid-row: 2; position: relative; display: flex; flex-direction: column; min-height: 0; }
-.mascot-peek { position: absolute; top: -66px; left: 50%; transform: translateX(-50%); width: 230px; pointer-events: none; z-index: 2; }
-.panel { padding: 22px 24px 20px; overflow: auto; min-height: 0; flex: 1; }
-.panel h2 { margin: 0 0 14px; font-size: 22px; }
-.step { display: flex; align-items: center; gap: 12px; margin: 18px 0 10px; font-weight: 600; font-size: 16px; }
-.step .n { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center; color: var(--muted); font-size: 14px; background: var(--glass-strong); }
+.main { grid-column: 2; grid-row: 2; position: relative; min-height: 0; display: flex; flex-direction: column; }
+.mascot-peek { position: absolute; top: -120px; left: 50%; transform: translateX(-50%); width: 230px; pointer-events: none; z-index: 3; filter: drop-shadow(0 10px 18px rgba(0, 20, 90, .35)); }
+.panel { padding: 26px 28px 22px; overflow: auto; min-height: 0; flex: 1; }
+.panel h2 { margin: 4px 0 16px; font-size: 24px; }
+.step { display: flex; align-items: center; gap: 12px; margin: 20px 0 12px; font-weight: 700; font-size: 18px; }
+.step:first-child { margin-top: 0; }
+.step .n {
+  width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center;
+  font-size: 15px; font-weight: 600; background: var(--glass2);
+}
 .field {
-  display: flex; align-items: center; gap: 10px; height: 52px; padding: 0 14px; border-radius: 16px;
+  display: flex; align-items: center; gap: 12px; height: 60px; padding: 0 16px; border-radius: 18px;
   background: var(--field); border: 1px solid var(--line);
 }
-.field input { flex: 1; border: 0; background: transparent; outline: none; font-size: 17px; min-width: 0; }
-.field .count { color: var(--muted); font-size: 14px; }
-.iconbtn { width: 30px; height: 30px; border-radius: 50%; border: 0; background: rgba(255, 255, 255, .1); display: grid; place-items: center; color: var(--text); }
-.modes { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.modes .col h4 { margin: 0 0 8px; font-weight: 500; color: var(--accent); font-size: 14px; }
+.field input { flex: 1; border: 0; background: transparent; outline: none; font-size: 19px; min-width: 0; }
+.field input::placeholder { color: var(--muted); }
+.field .count { color: var(--muted); font-size: 15px; }
+.iconbtn { width: 34px; height: 34px; border-radius: 50%; border: 0; background: rgba(255, 255, 255, .14); display: grid; place-items: center; font-size: 15px; }
+.colors { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+.colors h4 { margin: 0 0 10px; font-weight: 500; color: #8fc1ff; font-size: 15px; }
+[data-theme="light"] .colors h4 { color: var(--accent); }
 .opt {
-  display: flex; align-items: center; gap: 10px; width: 100%; height: 46px; padding: 0 12px; border-radius: 14px;
-  border: 1px solid var(--line); background: var(--tile); margin-bottom: 8px; text-align: left;
+  width: 100%; height: 50px; display: flex; align-items: center; gap: 12px; padding: 0 14px; border-radius: 16px;
+  border: 1px solid var(--line); background: var(--tile); margin-bottom: 10px; text-align: left; font-size: 16px;
 }
-.opt.sel { border-color: rgba(160, 200, 255, .7); background: linear-gradient(135deg, rgba(79, 139, 255, .55), rgba(123, 92, 255, .4)); box-shadow: 0 0 18px rgba(79, 139, 255, .35); }
-.opt .dot { width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .7); flex: none; }
-.opt.sel .dot { background: #fff; box-shadow: inset 0 0 0 3px var(--accent); }
-.opt .grad { width: 18px; height: 18px; border-radius: 50%; background: linear-gradient(135deg, #ff6ad5, #6a7bff); flex: none; }
-.opt .orig { width: 18px; height: 18px; border-radius: 50%; background: conic-gradient(#ff6b6b, #ffd34d, #5cd66b, #4f8bff, #b56bff, #ff6b6b); flex: none; }
-.opt .picker { margin-left: auto; }
-.swatches { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-.sw { width: 34px; height: 34px; border-radius: 50%; border: 2px solid transparent; padding: 0; outline: 2px solid transparent; outline-offset: 2px; }
-.sw.sel { outline-color: #fff; }
+.opt.sel { background: linear-gradient(135deg, rgba(70, 140, 255, .9), rgba(105, 92, 255, .8)); border-color: rgba(200, 225, 255, .7); box-shadow: 0 0 22px rgba(70, 140, 255, .5); }
+.opt .dot { width: 20px; height: 20px; border-radius: 50%; border: 2px solid #fff; flex: none; }
+.opt.sel .dot { background: #fff; box-shadow: inset 0 0 0 4px var(--accent); }
+.opt .grad { width: 20px; height: 20px; border-radius: 50%; background: linear-gradient(135deg, #ff7ad9, #7b8cff); flex: none; }
+.opt .orig { width: 20px; height: 20px; border-radius: 50%; background: conic-gradient(#ff6b6b, #ffd34d, #5cd66b, #4f8bff, #b56bff, #ff6b6b); flex: none; }
+.opt .paint { margin-left: auto; width: 26px; height: 26px; border-radius: 50%; border: 0; padding: 0; background: transparent; cursor: pointer; }
+.opt .paint::-webkit-color-swatch-wrapper { padding: 0; }
+.opt .paint::-webkit-color-swatch { border: 1px solid rgba(255, 255, 255, .6); border-radius: 50%; }
+.swatches { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; padding-top: 4px; }
+.sw { width: 40px; height: 40px; border-radius: 50%; border: 3px solid transparent; padding: 0; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .25); }
+.sw.sel { border-color: #fff; box-shadow: 0 0 0 3px rgba(80, 150, 255, .8); }
 .sw.orig { background: conic-gradient(#ff6b6b, #ffd34d, #5cd66b, #4f8bff, #b56bff, #ff6b6b); }
-.colorpick { width: 30px; height: 30px; border: 0; padding: 0; background: transparent; border-radius: 50%; cursor: pointer; }
-.hidden-input { display: none; }
-.toggle { width: 44px; height: 24px; border-radius: 999px; background: rgba(255, 255, 255, .2); position: relative; border: 0; flex: none; }
-.toggle::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .15s; }
-.toggle.on { background: var(--accent); }
-.toggle.on::after { transform: translateX(20px); }
-.picker-head { display: flex; align-items: center; gap: 10px; margin-top: 18px; }
+.sw.more { background: rgba(255, 255, 255, .22); display: grid; place-items: center; font-size: 18px; position: relative; }
+.sw.more input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; border: 0; padding: 0; }
+.picker-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .picker-head .sp { flex: 1; }
 .btn {
-  height: 42px; padding: 0 18px; border-radius: 14px; border: 1px solid var(--line);
-  background: var(--glass-strong); display: inline-flex; align-items: center; gap: 8px; font-size: 14px;
+  height: 46px; padding: 0 20px; border-radius: 16px; border: 1px solid var(--line); background: var(--glass2);
+  display: inline-flex; align-items: center; gap: 10px; font-size: 15px; white-space: nowrap;
 }
-.btn.primary { background: linear-gradient(135deg, var(--accent), var(--accent2)); border: 0; color: #fff; box-shadow: 0 6px 22px rgba(79, 139, 255, .45); }
+.btn.primary { background: linear-gradient(135deg, #4a9bff, #5d61ff); border: 0; color: #fff; box-shadow: 0 8px 26px rgba(74, 150, 255, .5); font-weight: 600; }
 .btn:disabled { opacity: .5; cursor: default; }
-.btn.big { height: 54px; font-size: 17px; width: 100%; justify-content: center; }
-.count-lbl { color: var(--muted); font-size: 14px; }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 10px; margin-top: 12px; }
+.btn.block { width: 100%; justify-content: center; height: 54px; font-size: 17px; }
+.count-lbl { color: var(--muted); font-size: 15px; }
+.grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
 .tile {
   position: relative; border-radius: 16px; background: var(--tile); border: 1px solid var(--line);
-  padding: 6px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 6px 4px 5px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0;
 }
 .tile input { position: absolute; opacity: 0; pointer-events: none; }
-.tile.on { border-color: rgba(160, 200, 255, .8); box-shadow: 0 0 16px rgba(79, 139, 255, .45); }
-.tile .pvbox { width: 72px; height: 72px; display: grid; place-items: center; }
-.tile .pvbox img, .tile .pvbox video, .tile .pvbox .lottie { width: 72px; height: 72px; object-fit: contain; }
+.tile.on { border-color: rgba(190, 220, 255, .85); box-shadow: 0 0 18px rgba(80, 150, 255, .55); }
+.tile .pvbox { width: 64px; height: 64px; display: grid; place-items: center; }
+.tile .pvbox img, .tile .pvbox video, .tile .pvbox .lottie { width: 64px; height: 64px; object-fit: contain; }
 .tile .pvbox .ph { color: var(--muted); }
-.tile .mark { position: absolute; top: 6px; right: 6px; width: 18px; height: 18px; border-radius: 50%; background: var(--glass-strong); border: 1px solid var(--line); font-size: 11px; display: grid; place-items: center; opacity: .6; }
-.tile.on .mark { background: var(--accent); border-color: transparent; color: #fff; opacity: 1; }
-.tile .id { font-size: 10px; color: var(--muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tile .kind { font-size: 10px; color: var(--muted); }
+.tile .mark { position: absolute; top: 5px; right: 5px; width: 18px; height: 18px; border-radius: 50%; background: rgba(255, 255, 255, .2); font-size: 11px; display: grid; place-items: center; }
+.tile.on .mark { background: #3d9bff; color: #fff; }
+.tile .id { font-size: 9px; color: var(--muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tile .kind { font-size: 9px; color: var(--muted); }
 .tile .kind.warn { color: var(--warn); }
 .tile.off { opacity: .45; cursor: default; }
-.empty { border: 1px dashed var(--line); border-radius: 16px; padding: 18px; color: var(--muted); margin-top: 12px; }
+.empty { border: 1px dashed var(--line); border-radius: 18px; padding: 18px; color: var(--muted); margin-top: 14px; }
+.empty a { color: var(--text); }
 .note { color: var(--muted); font-size: 13px; margin-top: 10px; }
-.bottombar { grid-column: 1 / 4; grid-row: 3; display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
-.bottombar .path { color: var(--muted); font-size: 14px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bottombar .path b { color: var(--text); font-weight: 500; }
-
-/* правая панель */
-.side-r { grid-column: 3; grid-row: 2; display: flex; flex-direction: column; gap: 16px; min-height: 0; }
-.preview { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 16px; }
-.preview .head { display: flex; align-items: center; gap: 10px; font-weight: 600; }
-.preview .head .sp { flex: 1; }
-.preview .stage { flex: 1; display: grid; place-items: center; min-height: 0; }
-.preview .stage img, .preview .stage video, .preview .stage .lottie { max-width: 100%; max-height: 100%; object-fit: contain; }
-.preview .stage .lottie { width: 260px; height: 260px; }
-.preview .hint { color: var(--muted); font-size: 13px; text-align: center; }
-.done { padding: 18px; text-align: center; }
-.done .ok { color: var(--ok); font-size: 20px; font-weight: 700; }
-.done p { color: var(--muted); font-size: 14px; margin: 6px 0 14px; }
-.msg { font-size: 14px; color: var(--muted); margin-top: 10px; }
+.msg { font-size: 14px; color: var(--muted); margin-top: 12px; min-height: 18px; }
 .msg.ok { color: var(--ok); }
 .msg.err { color: var(--err); }
 .failed div { color: var(--err); font-size: 13px; }
+.genrow { margin-top: 22px; }
+
+/* низ */
+.bottombar { grid-column: 1 / 4; grid-row: 3; display: flex; align-items: center; gap: 14px; padding: 0 22px; }
+.bottombar .path { color: var(--muted); font-size: 15px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bottombar .path b { color: var(--text); font-weight: 500; }
+.bottombar .spark { font-size: 22px; color: #bcd6ff; }
+
+/* правая панель */
+.side-r { grid-column: 3; grid-row: 2; display: flex; flex-direction: column; gap: 18px; min-height: 0; }
+.preview { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 18px 20px; }
+.preview .head { display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 600; }
+.preview .head .sp { flex: 1; }
+.preview .stage { flex: 1; display: grid; place-items: center; min-height: 0; padding: 10px; }
+.preview .stage img, .preview .stage video, .preview .stage .lottie { max-width: 100%; max-height: 100%; object-fit: contain; }
+.preview .stage .lottie { width: 280px; height: 280px; }
+.preview .hint { color: var(--muted); font-size: 13px; text-align: center; min-height: 18px; }
+.done { padding: 22px; text-align: center; }
+.done .ok { color: var(--ok); font-size: 22px; font-weight: 700; }
+.done .ok::before { content: "✓ "; }
+.done p { color: var(--muted); font-size: 15px; margin: 8px 0 18px; }
 
 /* остальные вкладки */
-.doc { color: var(--text); font-size: 15px; line-height: 1.55; }
-.doc h3 { margin: 16px 0 6px; font-size: 16px; }
-.doc code { background: rgba(255, 255, 255, .1); padding: 1px 6px; border-radius: 6px; }
-.doc ol, .doc ul { padding-left: 20px; }
-.setting { border: 1px solid var(--line); border-radius: 18px; padding: 16px; background: var(--glass-strong); margin-bottom: 14px; }
-.setting h4 { margin: 0 0 10px; font-size: 15px; }
-.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-.row .field { flex: 1; min-width: 200px; height: 44px; }
-.drop { margin-top: 12px; border: 1px dashed var(--line); border-radius: 16px; padding: 22px; text-align: center; color: var(--muted); cursor: pointer; }
+.setting { border: 1px solid var(--line); border-radius: 22px; padding: 18px; background: var(--glass2); margin-bottom: 16px; }
+.setting h4 { margin: 0 0 12px; font-size: 16px; }
+.row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.row .field { flex: 1; min-width: 220px; height: 50px; }
+.drop { margin-top: 14px; border: 1px dashed var(--line); border-radius: 18px; padding: 24px; text-align: center; color: var(--muted); cursor: pointer; }
 .drop.over { border-color: var(--accent); color: var(--text); }
-.packs { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
-.pack { border: 1px solid var(--line); border-radius: 18px; padding: 16px; background: var(--glass-strong); }
-.pack b { display: block; font-size: 16px; }
+.drop small { color: var(--muted); }
+.doc { font-size: 16px; line-height: 1.6; }
+.doc h3 { margin: 18px 0 6px; font-size: 17px; }
+.doc ol { padding-left: 22px; }
+.packs { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+.pack { border: 1px solid var(--line); border-radius: 22px; padding: 18px; background: var(--glass2); }
+.pack b { display: block; font-size: 17px; }
 .pack small { color: var(--muted); }
-.pack .btn { margin-top: 12px; }
+.pack .btn { margin-top: 14px; }
+.hidden-input { display: none; }
 </style>
 </head>
 <body>
@@ -179,16 +202,18 @@ button { cursor: pointer; }
   <!-- шапка -->
   <div class="glass brand">
     <img src="/assets/lunary_logo.png" alt="">
-    <div><b>Emoji Studio</b><small>Создавай свои эмодзи ♡</small></div>
+    <div><b>Lunary Emoji</b><small>Создавай свои эмодзи ♡</small></div>
   </div>
-  <div class="glass topbar">
-    <div class="pill" title="Тема">
+  <div class="topbar">
+    <div class="themepill">
       <button id="themeLight" title="Светлая тема">☀</button>
       <button id="themeDark" title="Тёмная тема">☾</button>
     </div>
-    <button class="winbtn" id="winMin" title="Свернуть">—</button>
-    <button class="winbtn" id="winMax" title="Во весь экран">▢</button>
-    <button class="winbtn close" id="winClose" title="Закрыть">✕</button>
+    <div class="winbar">
+      <button id="winMin" title="Свернуть">—</button>
+      <button id="winMax" title="Во весь экран">▢</button>
+      <button id="winClose" class="close" title="Закрыть">✕</button>
+    </div>
   </div>
 
   <!-- боковая панель -->
@@ -200,10 +225,10 @@ button { cursor: pointer; }
       <button data-view="about"><span class="ic">ⓘ</span>О приложении</button>
     </nav>
     <div class="grow"></div>
-    <div class="botcard">
+    <a class="botcard" id="botLink" href="#" target="_blank">
       <div class="tg">➤</div>
-      <div><a id="botLink" href="#" target="_blank">Telegram-бот</a><small id="botName">имя не задано</small></div>
-    </div>
+      <div><b>Telegram-бот</b><small id="botName">имя не задано</small></div>
+    </a>
   </aside>
 
   <!-- центр -->
@@ -220,16 +245,16 @@ button { cursor: pointer; }
       </div>
 
       <div class="step"><span class="n">2</span>Цвета</div>
-      <div class="modes">
-        <div class="col">
+      <div class="colors">
+        <div>
           <h4>Цвет эмодзи</h4>
           <button class="opt" data-mode="orig"><span class="orig"></span>Оригинал</button>
           <button class="opt" data-mode="one"><span class="dot"></span>Один цвет
-            <input type="color" class="colorpick" id="bodyA" value="#8b5cf6" title="Выбрать цвет"></button>
+            <input type="color" class="paint" id="bodyA" value="#8b5cf6" title="Выбрать цвет"></button>
           <button class="opt" data-mode="grad"><span class="grad"></span>Градиент
-            <span class="picker" id="gradPick"><input type="color" class="colorpick" id="bodyB" value="#ffcc00" title="Второй цвет"></span></button>
+            <input type="color" class="paint" id="bodyB" value="#ffcc00" title="Второй цвет"></button>
         </div>
-        <div class="col">
+        <div>
           <h4>Цвет текста</h4>
           <div class="swatches" id="nickSw"></div>
         </div>
@@ -246,17 +271,18 @@ button { cursor: pointer; }
       <div class="empty hidden" id="emptyBox">Исходники ещё не загружены. Откройте <a href="#" id="goSettings">Настройки</a> и загрузите эмодзи из Telegram.</div>
       <div class="grid" id="pickGrid"></div>
 
-      <div class="step"></div>
-      <button class="btn primary big" id="gen">✦ Создать эмодзи</button>
-      <div class="msg" id="genMsg"></div>
-      <div class="failed" id="genFailed"></div>
+      <div class="genrow">
+        <button class="btn primary block" id="gen">✦ Создать эмодзи</button>
+        <div class="msg" id="genMsg"></div>
+        <div class="failed" id="genFailed"></div>
+      </div>
     </section>
 
     <!-- Мои паки -->
     <section id="view-packs" class="glass panel hidden">
       <h2>Мои паки</h2>
       <div class="packs" id="packList"></div>
-      <div class="empty hidden" id="packEmpty">Пока нет созданных паков. Они появятся в папке output после генерации.</div>
+      <div class="empty hidden" id="packEmpty">Пока нет созданных паков. Они появятся здесь после генерации.</div>
     </section>
 
     <!-- Настройки -->
@@ -268,7 +294,7 @@ button { cursor: pointer; }
           <div class="field"><input id="botUsername" placeholder="имя бота без @" autocomplete="off"></div>
           <button class="btn" id="saveBotName">Сохранить</button>
         </div>
-        <div class="row" style="margin-top:10px">
+        <div class="row" style="margin-top:12px">
           <div class="field"><input id="botToken" type="password" placeholder="123456:ABC…" autocomplete="off"></div>
           <button class="btn" id="saveBot">Сохранить токен</button>
         </div>
@@ -287,7 +313,7 @@ button { cursor: pointer; }
       </div>
     </section>
 
-    <!-- О приложении / инструкция -->
+    <!-- О приложении -->
     <section id="view-about" class="glass panel hidden">
       <h2>О приложении</h2>
       <div class="doc">
@@ -296,9 +322,9 @@ button { cursor: pointer; }
           <li>В Настройках укажите имя бота и загрузите исходники: скопируйте ID и вставьте их в чат с ботом, затем перетащите присланный zip.</li>
           <li>Введите ник, выберите цвет эмодзи и цвет текста.</li>
           <li>Отметьте нужные эмодзи и нажмите «Создать эмодзи». Файлы появятся в папке output.</li>
-          <li>Пак создайте через вашего бота, как и раньше.</li>
+          <li>Пак создайте через вашего бота: кнопка «Создать пак» откроет его.</li>
         </ol>
-        <p><b>Emoji Studio</b>, версия <span id="ver">1.0.0</span>. Токен бота нужен только для загрузки исходников из Telegram.</p>
+        <p><b>Lunary Emoji</b>, версия <span id="ver">1.0.0</span>. Токен бота нужен только для загрузки исходников из Telegram.</p>
       </div>
     </section>
   </main>
@@ -307,19 +333,19 @@ button { cursor: pointer; }
   <aside class="side-r" id="view-create-side">
     <div class="glass preview">
       <div class="head"><span>👁</span> Предпросмотр <span class="sp"></span>
-        <button class="iconbtn" id="expand" title="Увеличить">⤢</button></div>
-      <div class="stage" id="stage">
+        <button class="iconbtn" id="expand" title="Открыть крупно">⤢</button></div>
+      <div class="stage">
         <img id="pvDefault" src="/assets/lunary_preview.png" alt="">
         <img id="pvImg" class="hidden" alt="">
         <video id="pvVid" class="hidden" autoplay loop muted playsinline></video>
         <div id="pvAnim" class="lottie hidden"></div>
       </div>
-      <div class="hint" id="pvHint">Выберите эмодзи и нажмите «Создать эмодзи»</div>
+      <div class="hint" id="pvHint"></div>
     </div>
     <div class="glass done hidden" id="doneCard">
-      <div class="ok">✓ Готово!</div>
-      <p>Эмодзи сохранены. Пак создайте через вашего бота.</p>
-      <button class="btn primary big" id="openOut">📂 Открыть папку</button>
+      <div class="ok">Готово!</div>
+      <p>Ваш эмодзи-пак успешно подготовлен</p>
+      <button class="btn primary block" id="packBtn">🚀 Создать пак</button>
     </div>
   </aside>
 
@@ -328,6 +354,7 @@ button { cursor: pointer; }
     <span>📁</span>
     <div class="path">Результаты будут сохранены в: <b id="outPath">output/</b></div>
     <button class="btn" id="openFolder">Открыть папку ↗</button>
+    <span class="spark">✦</span>
   </div>
 </div>
 
@@ -358,9 +385,8 @@ $("themeLight").onclick = () => applyTheme("light");
 $("themeDark").onclick = () => applyTheme("dark");
 applyTheme(localStorage.getItem("es-theme") || "dark");
 
-/* ───── окно (кнопки работают в окне приложения) ───── */
-["winMin", "winMax", "winClose"].forEach((id) => {
-  const action = { winMin: "minimize", winMax: "maximize", winClose: "close" }[id];
+/* ───── окно ───── */
+[["winMin", "minimize"], ["winMax", "maximize"], ["winClose", "close"]].forEach(([id, action]) => {
   $(id).onclick = () => api("/api/window", {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }),
   }).catch(() => {});
@@ -373,7 +399,6 @@ function showView(name) {
   VIEWS.forEach((v) => $("view-" + v).classList.toggle("hidden", v !== name));
   $("view-create-side").classList.toggle("hidden", name !== "create");
   document.querySelector(".bottombar").classList.toggle("hidden", name !== "create");
-  $("view-create-side").style.display = name === "create" ? "" : "none";
   document.querySelector(".main").style.gridColumn = name === "create" ? "2" : "2 / 4";
   if (name === "packs") loadPacks();
 }
@@ -384,13 +409,13 @@ $("goSettings").onclick = (e) => { e.preventDefault(); showView("settings"); };
 async function loadState() {
   STATE = await api("/api/state");
   $("botUsername").value = STATE.bot_username || "";
-  $("botName").textContent = STATE.bot_username ? "@" + STATE.bot_username : "имя не задано";
+  $("botName").textContent = STATE.bot_username ? "@" + STATE.bot_username + " →" : "имя не задано";
   $("botLink").href = STATE.bot_username ? "https://t.me/" + STATE.bot_username : "#";
   $("botToken").placeholder = STATE.has_token ? "Токен сохранён (введите новый, чтобы заменить)" : "123456:ABC…";
   $("readyCount").textContent = `${STATE.ready_count} из ${STATE.total} доступно`;
   $("emptyBox").classList.toggle("hidden", STATE.ready_count > 0);
   $("ver").textContent = STATE.version || "1.0.0";
-  $("outPath").textContent = "output/";
+  updateNick();
   renderSwatches();
   renderPicker();
   updateModes();
@@ -412,11 +437,21 @@ function renderSwatches() {
     b.onclick = () => { SEL.nick = p.hex; renderSwatches(); };
     box.appendChild(b);
   });
+  const more = document.createElement("label");
+  more.className = "sw more";
+  more.title = "Свой цвет";
+  more.textContent = "⋯";
+  const picker = document.createElement("input");
+  picker.type = "color";
+  picker.value = SEL.nick !== "original" ? SEL.nick : "#ffffff";
+  picker.oninput = (e) => { SEL.nick = e.target.value; renderSwatches(); };
+  more.appendChild(picker);
+  box.appendChild(more);
 }
 
 function updateModes() {
   document.querySelectorAll(".opt[data-mode]").forEach((b) => b.classList.toggle("sel", b.dataset.mode === SEL.mode));
-  $("gradPick").classList.toggle("hidden", SEL.mode !== "grad");
+  $("bodyB").style.display = SEL.mode === "grad" ? "" : "none";
 }
 document.querySelectorAll(".opt[data-mode]").forEach((b) => b.onclick = (e) => {
   if (e.target.tagName === "INPUT") return;
@@ -433,7 +468,6 @@ function updateNick() {
 }
 $("nick").oninput = updateNick;
 $("nickClear").onclick = () => { $("nick").value = ""; updateNick(); $("nick").focus(); };
-updateNick();
 
 /* ───── превью исходников ───── */
 const lazyObs = ("IntersectionObserver" in window) ? new IntersectionObserver((entries) => {
@@ -498,7 +532,7 @@ function renderPicker() {
     id.title = s.id;
     const kind = document.createElement("div");
     kind.className = "kind" + (s.ready && !s.calibrated ? " warn" : "");
-    kind.textContent = !s.ready ? "нет исходника" : ({ animated: "TGS", video: "WEBM", static: "WEBP" }[s.fmt] + (s.calibrated ? "" : " · без калибровки"));
+    kind.textContent = !s.ready ? "нет исходника" : ({ animated: "TGS", video: "WEBM", static: "WEBP" }[s.fmt] + (s.calibrated ? "" : " · без калиб."));
     tile.append(cb, makePreview(s), mark, id, kind);
     grid.appendChild(tile);
   });
@@ -609,7 +643,7 @@ $("gen").onclick = async () => {
     const warn = r.failed.filter((f) => f.error.startsWith("сохранено, но"));
     setMsg($("genMsg"), `Готово: ${r.ok.length} из ${r.ok.length + real.length}.`, real.length ? "" : "ok");
     $("outPath").textContent = "output/" + r.out_dir_name + "/";
-    $("openOut").dataset.dir = r.out_dir_name;
+    $("openFolder").dataset.dir = r.out_dir_name;
     $("genFailed").innerHTML = warn.concat(real).map((f) => `<div>${f.id}: ${f.error.replace(/</g, "&lt;")}</div>`).join("");
     const first = r.ok.find((n) => n.endsWith(".webp")) || r.ok[0];
     if (first) showResult(r.out_dir_name, first);
@@ -636,15 +670,19 @@ function showResult(dir, fileName) {
   }
 }
 
-/* ───── открыть папку ───── */
+/* ───── папка и пак ───── */
 function openDir(dir) {
   return api("/api/open-output", {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ dir: dir || "" }),
   });
 }
-$("openOut").onclick = () => openDir($("openOut").dataset.dir).catch((e) => setMsg($("genMsg"), e.message, "err"));
-$("openFolder").onclick = () => openDir("").catch((e) => setMsg($("genMsg"), e.message, "err"));
+$("openFolder").onclick = () => openDir($("openFolder").dataset.dir || "").catch((e) => setMsg($("genMsg"), e.message, "err"));
+$("expand").onclick = () => $("stage").scrollIntoView({ block: "center" });
+$("packBtn").onclick = () => {
+  if (STATE && STATE.bot_username) window.open("https://t.me/" + STATE.bot_username, "_blank");
+  else showView("settings");
+};
 
 /* ───── мои паки ───── */
 async function loadPacks() {
