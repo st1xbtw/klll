@@ -16,7 +16,7 @@ from fontTools.pens.basePen import BasePen
 from fontTools.ttLib import TTFont
 
 from . import config
-from .common import Tint, find_font, make_tint, parse_hex, shade
+from .common import Tint, find_font, font_scale, make_tint, parse_hex, shade
 
 log = logging.getLogger(__name__)
 
@@ -486,7 +486,7 @@ def _nick_shape_items(nick: str, region: tuple, ) -> list[dict]:
     ys = [p[1] for c in contours for p in c["v"]]
     minx, maxx, miny, maxy = min(xs), max(xs), min(ys), max(ys)
     x0, y0, x1, y1 = region
-    sc = min((x1 - x0) / max(maxx - minx, 1.0), (y1 - y0) / (0.85 * upem))
+    sc = min((x1 - x0) / max(maxx - minx, 1.0), (y1 - y0) / (0.85 * upem)) * font_scale()
     tx = (x0 + x1) / 2 - (minx + maxx) / 2 * sc
     ty = (y0 + y1) / 2 + (miny + maxy) / 2 * sc
 

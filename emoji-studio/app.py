@@ -22,7 +22,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
-from emoji_studio import config, generator, sources, telegram_fetch  # noqa: E402
+from emoji_studio import common, config, generator, sources, telegram_fetch  # noqa: E402
 
 WEB_INDEX = config.BUNDLE_DIR / "web" / "index.html"
 ASSETS_DIR = config.BUNDLE_DIR / "web" / "assets"
@@ -43,6 +43,17 @@ def load_settings() -> dict:
 
 def save_settings(data: dict) -> None:
     config.SETTINGS_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+MAX_FONT = 10 * 1024 * 1024
+
+
+def font_scale_value(settings: dict) -> float:
+    try:
+        v = float(settings.get("font_scale", 1.0))
+    except (TypeError, ValueError):
+        v = 1.0
+    return min(1.5, max(0.5, v))
 
 
 def state() -> dict:
@@ -66,6 +77,8 @@ def state() -> dict:
         "nick_max": config.NICK_MAX_LEN,
         "bot_username": settings.get("bot_username", ""),
         "has_token": bool(settings.get("bot_token")),
+        "font_path": settings.get("font_path", ""),
+        "font_scale": font_scale_value(settings),
         "ffmpeg": shutil.which(config.FFMPEG) is not None,
         "output_dir": str(config.OUTPUT_DIR),
         "version": config.APP_VERSION,
@@ -139,6 +152,8 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(body)
         elif path == "/api/state":
             self._json(200, state())
+        elif path == "/api/fonts":
+            self._json(200, {"fonts": common.list_fonts()})
         elif path == "/api/packs":
             self._json(200, {"packs": list_packs()})
         elif path.startswith("/assets/"):
@@ -198,8 +213,36 @@ class Handler(BaseHTTPRequestHandler):
                         settings["bot_token"] = token
                     else:
                         settings.pop("bot_token", None)
+                if "font_scale" in req:
+                    settings["font_scale"] = font_scale_value({"font_scale": req["font_scale"]})
+                if "font_path" in req:
+                    chosen = str(req.get("font_path") or "")
+                    if chosen and chosen not in {f["path"] for f in common.list_fonts()}:
+                        raise ValueError("Шрифт не найден в списке")
+                    if chosen:
+                        settings["font_path"] = chosen
+                    else:
+                        settings.pop("font_path", None)
                 save_settings(settings)
-                self._json(200, {"bot_username": username, "has_token": bool(settings.get("bot_token"))})
+                self._json(200, {"bot_username": username, "has_token": bool(settings.get("bot_token")),
+                                 "font_path": settings.get("font_path", ""),
+                                 "font_scale": font_scale_value(settings)})
+            elif path == "/api/font-upload":
+                name = Path(unquote(self.headers.get("X-Filename", ""))).name
+                if Path(name).suffix.lower() not in (".ttf", ".otf"):
+                    raise ValueError("Нужен файл шрифта .ttf или .otf")
+                data = self._body(MAX_FONT)
+                dest_dir = config.USER_DIR / "fonts"
+                dest_dir.mkdir(parents=True, exist_ok=True)
+                dest = dest_dir / re.sub(r"[^\w.\- ]", "_", name)
+                dest.write_bytes(data)
+                if not common.supports_cyrillic(dest):
+                    dest.unlink(missing_ok=True)
+                    raise ValueError("В шрифте нет кириллицы и латиницы")
+                settings = load_settings()
+                settings["font_path"] = str(dest)
+                save_settings(settings)
+                self._json(200, {"name": common.font_name(dest), "path": str(dest)})
             elif path == "/api/fetch-sources":
                 settings = load_settings()
                 token = settings.get("bot_token", "")

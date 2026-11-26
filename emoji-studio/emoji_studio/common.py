@@ -6,6 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from fontTools.ttLib import TTFont
+import json
 from PIL import ImageFont
 
 from . import config
@@ -57,8 +58,23 @@ _SYSTEM_FONTS = [
 ]
 
 
+def _settings() -> dict:
+    try:
+        return json.loads(config.SETTINGS_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def font_scale() -> float:
+    try:
+        v = float(_settings().get("font_scale", 1.0))
+    except (TypeError, ValueError):
+        v = 1.0
+    return min(1.5, max(0.5, v))
+
+
 @lru_cache(maxsize=1)
-def find_font() -> Path:
+def _default_font() -> Path:
     local = sorted(
         p for p in config.FONTS_DIR.iterdir() if p.suffix.lower() in (".ttf", ".otf")
     )
@@ -71,6 +87,52 @@ def find_font() -> Path:
     raise FileNotFoundError(
         "Положите TTF-шрифт с кириллицей и латиницей в папку fonts/ (например DejaVuSans-Bold.ttf)"
     )
+
+
+def find_font() -> Path:
+    """Шрифт, выбранный в настройках, либо встроенный по умолчанию."""
+    chosen = _settings().get("font_path")
+    if chosen and Path(chosen).is_file():
+        return Path(chosen)
+    return _default_font()
+
+
+def supports_cyrillic(path: Path) -> bool:
+    try:
+        cmap = TTFont(str(path), lazy=True).getBestCmap() or {}
+    except Exception:  # noqa: BLE001 — битый или нечитаемый файл
+        return False
+    return 0x0410 in cmap and 0x0430 in cmap and 0x0041 in cmap
+
+
+def font_name(path: Path) -> str:
+    try:
+        names = TTFont(str(path), lazy=True)["name"]
+        n = names.getDebugName(4) or names.getDebugName(1)
+        return n or path.stem
+    except Exception:  # noqa: BLE001
+        return path.stem
+
+
+def _font_dirs() -> list[Path]:
+    dirs = [Path("C:/Windows/Fonts"), Path("/Library/Fonts"),
+            Path("/System/Library/Fonts/Supplemental"), Path("/usr/share/fonts"),
+            config.FONTS_DIR, config.USER_DIR / "fonts"]
+    return [d for d in dirs if d.is_dir()]
+
+
+def list_fonts() -> list[dict]:
+    """Установленные в системе и добавленные вручную шрифты с кириллицей."""
+    found: dict[str, dict] = {}
+    for d in _font_dirs():
+        for p in d.rglob("*"):
+            if p.suffix.lower() not in (".ttf", ".otf") or not p.is_file():
+                continue
+            name = font_name(p)
+            if name in found or not supports_cyrillic(p):
+                continue
+            found[name] = {"name": name, "path": str(p)}
+    return sorted(found.values(), key=lambda f: f["name"].lower())
 
 
 @lru_cache(maxsize=4)
@@ -101,4 +163,4 @@ def fit_font_size(text: str, max_w: int, max_h: int, upper: int = 400) -> int:
             best, lo = mid, mid + 1
         else:
             hi = mid - 1
-    return best
+    return max(4, int(best * font_scale()))

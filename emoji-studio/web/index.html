@@ -7,17 +7,19 @@
 <link rel="icon" href="/assets/lunary_logo.png">
 <style>
 :root {
-  --text: #ffffff; --muted: #b8c8f2; --accent: #3d8bff; --accent2: #6d5bff;
+  --text: #ffffff; --muted: #b8c8f2; --accent: #4a9bff; --accent2: #6d5bff;
   --ok: #3fe09a; --warn: #ffbf3a; --err: #ff6d7d;
   --glass: rgba(42, 78, 190, .34); --glass2: rgba(30, 60, 170, .5);
-  --line: rgba(170, 205, 255, .28); --field: rgba(8, 20, 80, .45); --tile: rgba(20, 45, 140, .5);
+  --line: rgba(170, 205, 255, .26); --field: rgba(8, 20, 80, .45); --tile: rgba(20, 45, 140, .5);
   --shadow: 0 14px 50px rgba(0, 10, 60, .45);
+  --checker: rgba(255, 255, 255, .07);
 }
 [data-theme="light"] {
   --text: #0d1a4a; --muted: #46598f; --accent: #2f7bff; --accent2: #6b55ff;
-  --glass: rgba(255, 255, 255, .6); --glass2: rgba(255, 255, 255, .78);
-  --line: rgba(70, 110, 210, .22); --field: rgba(255, 255, 255, .85); --tile: rgba(255, 255, 255, .8);
+  --glass: rgba(255, 255, 255, .6); --glass2: rgba(255, 255, 255, .8);
+  --line: rgba(70, 110, 210, .22); --field: rgba(255, 255, 255, .85); --tile: rgba(255, 255, 255, .85);
   --shadow: 0 14px 40px rgba(40, 70, 170, .2);
+  --checker: rgba(20, 50, 140, .06);
 }
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
@@ -32,7 +34,7 @@ body {
 [data-theme="light"] body {
   background: radial-gradient(900px 600px at 50% 10%, #cfe0ff, transparent 60%), linear-gradient(180deg, #e7efff, #bcd1ff);
 }
-button, input { font: inherit; color: inherit; }
+button, input, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
 .hidden { display: none !important; }
 .glass {
@@ -49,7 +51,7 @@ button { cursor: pointer; }
 
 /* шапка */
 .brand { grid-column: 1; grid-row: 1; display: flex; align-items: center; gap: 14px; padding: 0 18px; }
-.brand img { width: 56px; height: 48px; object-fit: contain; flex: none; }
+.brand img { width: 52px; height: auto; object-fit: contain; flex: none; }
 .brand b { font-size: 22px; font-weight: 700; display: block; letter-spacing: .2px; }
 .brand small { color: var(--muted); font-size: 13px; }
 .topbar { grid-column: 2 / 4; grid-row: 1; display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding: 0 16px; }
@@ -84,15 +86,16 @@ button { cursor: pointer; }
 
 /* центр */
 .main { grid-column: 2; grid-row: 2; position: relative; min-height: 0; display: flex; flex-direction: column; }
-.mascot-peek { position: absolute; top: -120px; left: 50%; transform: translateX(-50%); width: 230px; pointer-events: none; z-index: 3; filter: drop-shadow(0 10px 18px rgba(0, 20, 90, .35)); }
+.mascot-peek { position: absolute; top: -110px; left: 50%; transform: translateX(-50%); width: 230px; pointer-events: none; z-index: 3; filter: drop-shadow(0 10px 18px rgba(0, 20, 90, .35)); }
 .panel { padding: 26px 28px 22px; overflow: auto; min-height: 0; flex: 1; }
 .panel h2 { margin: 4px 0 16px; font-size: 24px; }
-.step { display: flex; align-items: center; gap: 12px; margin: 20px 0 12px; font-weight: 700; font-size: 18px; }
-.step:first-child { margin-top: 0; }
+.step { display: flex; align-items: center; gap: 12px; margin: 22px 0 12px; font-weight: 700; font-size: 18px; }
+.step:first-of-type { margin-top: 0; }
 .step .n {
   width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center;
   font-size: 15px; font-weight: 600; background: var(--glass2);
 }
+.step .hint { margin-left: auto; font-weight: 400; font-size: 14px; color: var(--muted); }
 .field {
   display: flex; align-items: center; gap: 12px; height: 60px; padding: 0 16px; border-radius: 18px;
   background: var(--field); border: 1px solid var(--line);
@@ -100,45 +103,70 @@ button { cursor: pointer; }
 .field input { flex: 1; border: 0; background: transparent; outline: none; font-size: 19px; min-width: 0; }
 .field input::placeholder { color: var(--muted); }
 .field .count { color: var(--muted); font-size: 15px; }
-.iconbtn { width: 34px; height: 34px; border-radius: 50%; border: 0; background: rgba(255, 255, 255, .14); display: grid; place-items: center; font-size: 15px; }
-.colors { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
-.colors h4 { margin: 0 0 10px; font-weight: 500; color: #8fc1ff; font-size: 15px; }
-[data-theme="light"] .colors h4 { color: var(--accent); }
-.opt {
-  width: 100%; height: 50px; display: flex; align-items: center; gap: 12px; padding: 0 14px; border-radius: 16px;
-  border: 1px solid var(--line); background: var(--tile); margin-bottom: 10px; text-align: left; font-size: 16px;
+.iconbtn { width: 34px; height: 34px; border-radius: 50%; border: 0; background: rgba(255, 255, 255, .14); display: grid; place-items: center; font-size: 15px; flex: none; }
+
+/* режимы цвета эмодзи */
+.modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.mode {
+  position: relative; border-radius: 20px; border: 1px solid var(--line); background: var(--tile);
+  padding: 14px 12px 12px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center;
+  transition: border-color .15s, box-shadow .15s, transform .15s;
 }
-.opt.sel { background: linear-gradient(135deg, rgba(70, 140, 255, .9), rgba(105, 92, 255, .8)); border-color: rgba(200, 225, 255, .7); box-shadow: 0 0 22px rgba(70, 140, 255, .5); }
-.opt .dot { width: 20px; height: 20px; border-radius: 50%; border: 2px solid #fff; flex: none; }
-.opt.sel .dot { background: #fff; box-shadow: inset 0 0 0 4px var(--accent); }
-.opt .grad { width: 20px; height: 20px; border-radius: 50%; background: linear-gradient(135deg, #ff7ad9, #7b8cff); flex: none; }
-.opt .orig { width: 20px; height: 20px; border-radius: 50%; background: conic-gradient(#ff6b6b, #ffd34d, #5cd66b, #4f8bff, #b56bff, #ff6b6b); flex: none; }
-.opt .paint { margin-left: auto; width: 26px; height: 26px; border-radius: 50%; border: 0; padding: 0; background: transparent; cursor: pointer; }
-.opt .paint::-webkit-color-swatch-wrapper { padding: 0; }
-.opt .paint::-webkit-color-swatch { border: 1px solid rgba(255, 255, 255, .6); border-radius: 50%; }
-.swatches { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; padding-top: 4px; }
-.sw { width: 40px; height: 40px; border-radius: 50%; border: 3px solid transparent; padding: 0; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .25); }
-.sw.sel { border-color: #fff; box-shadow: 0 0 0 3px rgba(80, 150, 255, .8); }
-.sw.orig { background: conic-gradient(#ff6b6b, #ffd34d, #5cd66b, #4f8bff, #b56bff, #ff6b6b); }
-.sw.more { background: rgba(255, 255, 255, .22); display: grid; place-items: center; font-size: 18px; position: relative; }
-.sw.more input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; border: 0; padding: 0; }
-.picker-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.picker-head .sp { flex: 1; }
-.btn {
-  height: 46px; padding: 0 20px; border-radius: 16px; border: 1px solid var(--line); background: var(--glass2);
-  display: inline-flex; align-items: center; gap: 10px; font-size: 15px; white-space: nowrap;
+.mode:hover { transform: translateY(-1px); }
+.mode.sel { border-color: rgba(200, 225, 255, .9); box-shadow: 0 0 0 2px rgba(120, 175, 255, .55), 0 0 22px rgba(80, 150, 255, .45); }
+.mode .title { font-size: 15px; font-weight: 600; }
+.mode .sub { font-size: 12px; color: var(--muted); }
+.mode .check {
+  position: absolute; top: 9px; right: 9px; width: 20px; height: 20px; border-radius: 50%;
+  background: rgba(255, 255, 255, .18); font-size: 11px; display: grid; place-items: center; opacity: 0;
 }
-.btn.primary { background: linear-gradient(135deg, #4a9bff, #5d61ff); border: 0; color: #fff; box-shadow: 0 8px 26px rgba(74, 150, 255, .5); font-weight: 600; }
-.btn:disabled { opacity: .5; cursor: default; }
-.btn.block { width: 100%; justify-content: center; height: 54px; font-size: 17px; }
-.count-lbl { color: var(--muted); font-size: 15px; }
+.mode.sel .check { opacity: 1; background: #3d9bff; color: #fff; }
+.mode .thumb {
+  width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .25);
+}
+.mode .thumb img { width: 84px; height: auto; }
+.mode .thumb.one { background: var(--c1, #8b5cf6); }
+.mode .thumb.grad { background: linear-gradient(135deg, var(--c1, #8b5cf6), var(--c2, #ffcc00)); }
+.mode .thumb.orig { background: var(--checker); }
+.mode .pickers { display: flex; gap: 8px; align-items: center; justify-content: center; }
+.mode .pick {
+  position: relative; width: 26px; height: 26px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .85);
+  overflow: hidden; cursor: pointer; flex: none; background: none;
+}
+.mode .pick input { position: absolute; inset: -6px; width: 40px; height: 40px; opacity: 0; cursor: pointer; border: 0; padding: 0; }
+.mode .pick i { position: absolute; inset: 0; border-radius: 50%; }
+
+/* цвет текста */
+.nickcolors { margin-top: 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.chip-orig {
+  height: 40px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--tile);
+  font-size: 14px; display: inline-flex; align-items: center; gap: 8px;
+}
+.chip-orig.sel { border-color: #fff; box-shadow: 0 0 0 2px rgba(120, 175, 255, .7); }
+.sw { width: 36px; height: 36px; border-radius: 50%; border: 0; padding: 0; position: relative; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .3); }
+.sw.sel { box-shadow: 0 0 0 3px var(--glass2), 0 0 0 5px #fff; }
+.sw.more { background: var(--tile); display: grid; place-items: center; overflow: hidden; }
+.sw.more input { position: absolute; inset: -6px; width: 48px; height: 48px; opacity: 0; cursor: pointer; border: 0; padding: 0; }
+.sw.more span { pointer-events: none; font-size: 18px; }
+.nickcolors .sep { width: 1px; height: 28px; background: var(--line); margin: 0 6px; }
+
+/* выбор эмодзи */
+.picker-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.seg { display: inline-flex; border-radius: 999px; background: var(--glass2); border: 1px solid var(--line); padding: 4px; gap: 2px; }
+.seg button { height: 38px; padding: 0 16px; border-radius: 999px; border: 0; background: transparent; font-size: 14px; white-space: nowrap; }
+.seg button.primary { background: linear-gradient(135deg, #4a9bff, #5d61ff); color: #fff; font-weight: 600; box-shadow: 0 6px 18px rgba(74, 150, 255, .45); }
+.seg button:hover:not(.primary) { background: rgba(255, 255, 255, .12); }
+.badge { margin-left: auto; padding: 7px 14px; border-radius: 999px; background: var(--glass2); border: 1px solid var(--line); font-size: 14px; color: var(--muted); }
+.badge b { color: var(--text); font-weight: 600; }
+.note { color: var(--muted); font-size: 13px; margin-top: 10px; }
 .grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
 .tile {
   position: relative; border-radius: 16px; background: var(--tile); border: 1px solid var(--line);
   padding: 6px 4px 5px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0;
 }
 .tile input { position: absolute; opacity: 0; pointer-events: none; }
-.tile.on { border-color: rgba(190, 220, 255, .85); box-shadow: 0 0 18px rgba(80, 150, 255, .55); }
+.tile.on { border-color: rgba(190, 220, 255, .85); box-shadow: 0 0 18px rgba(80, 150, 255, .5); }
 .tile .pvbox { width: 64px; height: 64px; display: grid; place-items: center; }
 .tile .pvbox img, .tile .pvbox video, .tile .pvbox .lottie { width: 64px; height: 64px; object-fit: contain; }
 .tile .pvbox .ph { color: var(--muted); }
@@ -150,45 +178,75 @@ button { cursor: pointer; }
 .tile.off { opacity: .45; cursor: default; }
 .empty { border: 1px dashed var(--line); border-radius: 18px; padding: 18px; color: var(--muted); margin-top: 14px; }
 .empty a { color: var(--text); }
-.note { color: var(--muted); font-size: 13px; margin-top: 10px; }
 .msg { font-size: 14px; color: var(--muted); margin-top: 12px; min-height: 18px; }
 .msg.ok { color: var(--ok); }
 .msg.err { color: var(--err); }
 .failed div { color: var(--err); font-size: 13px; }
 .genrow { margin-top: 22px; }
+.btn {
+  height: 46px; padding: 0 20px; border-radius: 16px; border: 1px solid var(--line); background: var(--glass2);
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px; font-size: 15px; white-space: nowrap;
+}
+.btn.primary { background: linear-gradient(135deg, #4a9bff, #5d61ff); border: 0; color: #fff; box-shadow: 0 8px 26px rgba(74, 150, 255, .5); font-weight: 600; }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn.block { width: 100%; height: 54px; font-size: 17px; }
 
 /* низ */
 .bottombar { grid-column: 1 / 4; grid-row: 3; display: flex; align-items: center; gap: 14px; padding: 0 22px; }
 .bottombar .path { color: var(--muted); font-size: 15px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bottombar .path b { color: var(--text); font-weight: 500; }
+.bottombar .btn { height: 42px; }
 .bottombar .spark { font-size: 22px; color: #bcd6ff; }
 
 /* правая панель */
 .side-r { grid-column: 3; grid-row: 2; display: flex; flex-direction: column; gap: 18px; min-height: 0; }
-.preview { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 18px 20px; }
+.preview { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 18px; }
 .preview .head { display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 600; }
 .preview .head .sp { flex: 1; }
-.preview .stage { flex: 1; display: grid; place-items: center; min-height: 0; padding: 10px; position: relative; }
-.preview .stage::before {
-  content: ""; position: absolute; width: 88%; aspect-ratio: 1; border-radius: 50%; pointer-events: none;
-  background: radial-gradient(circle, rgba(120, 175, 255, .38) 0%, rgba(90, 130, 255, .14) 45%, transparent 70%);
+.preview .tag { font-size: 12px; font-weight: 500; padding: 4px 10px; border-radius: 999px; background: var(--glass2); border: 1px solid var(--line); color: var(--muted); }
+.stage {
+  flex: 1; min-height: 0; margin-top: 14px; border-radius: 22px; border: 1px solid var(--line); position: relative; overflow: hidden;
+  display: grid; place-items: center;
+  background-color: var(--field);
+  background-image:
+    linear-gradient(45deg, var(--checker) 25%, transparent 25%), linear-gradient(-45deg, var(--checker) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--checker) 75%), linear-gradient(-45deg, transparent 75%, var(--checker) 75%);
+  background-size: 18px 18px; background-position: 0 0, 0 9px, 9px -9px, -9px 0;
 }
-.preview .stage img, .preview .stage video, .preview .stage .lottie { position: relative; max-width: 92%; max-height: 92%; object-fit: contain; filter: drop-shadow(0 14px 22px rgba(0, 15, 80, .45)); }
-.preview .stage .lottie { width: 280px; height: 280px; }
-.preview .hint { color: var(--muted); font-size: 13px; text-align: center; min-height: 18px; }
-.done { padding: 22px; text-align: center; }
+.stage::before {
+  content: ""; position: absolute; width: 90%; aspect-ratio: 1; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle, rgba(120, 175, 255, .42) 0%, rgba(90, 130, 255, .12) 50%, transparent 70%);
+}
+.stage img, .stage video, .stage .lottie { position: relative; max-width: 86%; max-height: 86%; object-fit: contain; filter: drop-shadow(0 16px 24px rgba(0, 12, 70, .5)); }
+.stage .lottie { width: 280px; height: 280px; }
+.stage #pvDefault { animation: float 4s ease-in-out infinite; }
+@keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+.stage .caption {
+  position: absolute; left: 12px; right: 12px; bottom: 12px; text-align: center; font-size: 13px; color: var(--text);
+  background: var(--glass2); border: 1px solid var(--line); border-radius: 14px; padding: 8px 10px; backdrop-filter: blur(8px);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.done { padding: 20px; text-align: center; }
 .done .ok { color: var(--ok); font-size: 22px; font-weight: 700; }
 .done .ok::before { content: "✓ "; }
-.done p { color: var(--muted); font-size: 15px; margin: 8px 0 18px; }
+.done p { color: var(--muted); font-size: 15px; margin: 8px 0 16px; }
 
-/* остальные вкладки */
+/* настройки */
 .setting { border: 1px solid var(--line); border-radius: 22px; padding: 18px; background: var(--glass2); margin-bottom: 16px; }
 .setting h4 { margin: 0 0 12px; font-size: 16px; }
 .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .row .field { flex: 1; min-width: 220px; height: 50px; }
+.select {
+  height: 50px; padding: 0 14px; border-radius: 16px; background: var(--field); border: 1px solid var(--line); min-width: 280px; flex: 1; outline: none;
+}
+.select option { color: #111; }
+.range-row { display: flex; align-items: center; gap: 14px; margin-top: 14px; }
+.range-row input[type=range] { flex: 1; accent-color: #4a9bff; }
+.range-row output { min-width: 56px; text-align: right; font-weight: 600; }
 .drop { margin-top: 14px; border: 1px dashed var(--line); border-radius: 18px; padding: 24px; text-align: center; color: var(--muted); cursor: pointer; }
 .drop.over { border-color: var(--accent); color: var(--text); }
 .drop small { color: var(--muted); }
+.drop-inline { margin-top: 12px; }
 .doc { font-size: 16px; line-height: 1.6; }
 .doc h3 { margin: 18px 0 6px; font-size: 17px; }
 .doc ol { padding-left: 22px; }
@@ -248,30 +306,42 @@ button { cursor: pointer; }
         <button class="iconbtn" id="nickClear" title="Очистить">✕</button>
       </div>
 
-      <div class="step"><span class="n">2</span>Цвета</div>
-      <div class="colors">
-        <div>
-          <h4>Цвет эмодзи</h4>
-          <button class="opt" data-mode="orig"><span class="orig"></span>Оригинал</button>
-          <button class="opt" data-mode="one"><span class="dot"></span>Один цвет
-            <input type="color" class="paint" id="bodyA" value="#8b5cf6" title="Выбрать цвет"></button>
-          <button class="opt" data-mode="grad"><span class="grad"></span>Градиент
-            <input type="color" class="paint" id="bodyB" value="#ffcc00" title="Второй цвет"></button>
+      <div class="step"><span class="n">2</span>Цвета эмодзи</div>
+      <div class="modes">
+        <div class="mode" data-mode="orig" role="button" tabindex="0">
+          <span class="check">✓</span>
+          <span class="thumb orig"><img src="/assets/lunary_logo.png" alt=""></span>
+          <span class="title">Оригинал</span>
+          <span class="sub">Цвета как в исходнике</span>
         </div>
-        <div>
-          <h4>Цвет текста</h4>
-          <div class="swatches" id="nickSw"></div>
+        <div class="mode" data-mode="one" role="button" tabindex="0">
+          <span class="check">✓</span>
+          <span class="thumb one" id="thumbOne"></span>
+          <span class="title">Один цвет</span>
+          <span class="pickers"><label class="pick"><i id="swOne"></i><input type="color" id="bodyA" value="#8b5cf6"></label></span>
+        </div>
+        <div class="mode" data-mode="grad" role="button" tabindex="0">
+          <span class="check">✓</span>
+          <span class="thumb grad" id="thumbGrad"></span>
+          <span class="title">Градиент</span>
+          <span class="pickers">
+            <label class="pick"><i id="swA"></i><input type="color" id="gradA" value="#8b5cf6"></label>
+            <label class="pick"><i id="swB"></i><input type="color" id="bodyB" value="#ffcc00"></label>
+          </span>
         </div>
       </div>
 
-      <div class="step"><span class="n">3</span>Выбор эмодзи</div>
-      <div class="picker-head">
-        <button class="btn primary" id="selAll">✓ Выбрать все</button>
-        <button class="btn" id="selNone">⟳ Сбросить</button>
-        <span class="sp"></span>
-        <span class="count-lbl" id="readyCount"></span>
+      <div class="nickcolors" id="nickSw"></div>
+      <div class="note">Цвет текста ника: «Оригинал» берёт цвет букв из исходника, остальные цвета применяются ко всем буквам.</div>
+
+      <div class="step"><span class="n">3</span>Выбор эмодзи <span class="hint" id="calNote"></span></div>
+      <div class="picker-bar">
+        <div class="seg">
+          <button class="primary" id="selAll">Выбрать все</button>
+          <button id="selNone">Сбросить</button>
+        </div>
+        <span class="badge" id="readyCount"></span>
       </div>
-      <div class="note" id="calNote"></div>
       <div class="empty hidden" id="emptyBox">Исходники ещё не загружены. Откройте <a href="#" id="goSettings">Настройки</a> и загрузите эмодзи из Telegram.</div>
       <div class="grid" id="pickGrid"></div>
 
@@ -292,6 +362,23 @@ button { cursor: pointer; }
     <!-- Настройки -->
     <section id="view-settings" class="glass panel hidden">
       <h2>Настройки</h2>
+
+      <div class="setting">
+        <h4>Шрифт ника</h4>
+        <div class="row">
+          <select class="select" id="fontSel"></select>
+          <button class="btn" id="fontUploadBtn">＋ Свой шрифт</button>
+          <input type="file" id="fontFile" class="hidden-input" accept=".ttf,.otf">
+        </div>
+        <div class="range-row">
+          <span class="note" style="margin:0">Размер</span>
+          <input type="range" id="fontScale" min="50" max="150" step="5" value="100">
+          <output id="fontScaleOut">100%</output>
+        </div>
+        <p class="note">Показаны установленные на этом компьютере шрифты с кириллицей. Свой шрифт — файл .ttf или .otf (до 10 МБ).</p>
+        <div class="msg" id="fontMsg"></div>
+      </div>
+
       <div class="setting">
         <h4>Бот</h4>
         <div class="row">
@@ -304,6 +391,7 @@ button { cursor: pointer; }
         </div>
         <div class="msg" id="tgMsg"></div>
       </div>
+
       <div class="setting">
         <h4>Исходники эмодзи</h4>
         <div class="row">
@@ -324,7 +412,8 @@ button { cursor: pointer; }
         <h3>Как пользоваться</h3>
         <ol>
           <li>В Настройках укажите имя бота и загрузите исходники: скопируйте ID и вставьте их в чат с ботом, затем перетащите присланный zip.</li>
-          <li>Введите ник, выберите цвет эмодзи и цвет текста.</li>
+          <li>Выберите шрифт и размер ника в Настройках, затем введите ник.</li>
+          <li>Выберите цвета эмодзи и цвет текста.</li>
           <li>Отметьте нужные эмодзи и нажмите «Создать эмодзи». Файлы появятся в папке output.</li>
           <li>Пак создайте через вашего бота: кнопка «Создать пак» откроет его.</li>
         </ol>
@@ -336,15 +425,14 @@ button { cursor: pointer; }
   <!-- правая панель -->
   <aside class="side-r" id="view-create-side">
     <div class="glass preview">
-      <div class="head"><span>👁</span> Предпросмотр <span class="sp"></span>
-        <button class="iconbtn" id="expand" title="Открыть крупно">⤢</button></div>
-      <div class="stage">
-        <img id="pvDefault" src="/assets/lunary_preview.png" alt="">
+      <div class="head">Предпросмотр <span class="sp"></span><span class="tag" id="pvTag">готово к созданию</span></div>
+      <div class="stage" id="stage">
+        <img id="pvDefault" src="/assets/lunary_peek.png" alt="">
         <img id="pvImg" class="hidden" alt="">
         <video id="pvVid" class="hidden" autoplay loop muted playsinline></video>
         <div id="pvAnim" class="lottie hidden"></div>
+        <div class="caption" id="pvHint">Выберите эмодзи и нажмите «Создать»</div>
       </div>
-      <div class="hint" id="pvHint"></div>
     </div>
     <div class="glass done hidden" id="doneCard">
       <div class="ok">Готово!</div>
@@ -366,7 +454,7 @@ button { cursor: pointer; }
 <script>
 const HDR = { "X-Emoji-Studio": "1" };
 let STATE = null;
-const SEL = { mode: "orig", bodyA: "#8b5cf6", bodyB: "#ffcc00", nick: "original" };
+const SEL = { mode: "orig", bodyA: "#8b5cf6", bodyB: "#ffcc00", gradA: "#8b5cf6", nick: "original" };
 const $ = (id) => document.getElementById(id);
 
 function setMsg(el, text, kind) { el.textContent = text || ""; el.className = "msg" + (kind ? " " + kind : ""); }
@@ -377,6 +465,7 @@ async function api(path, opts = {}) {
   if (!res.ok) throw new Error(data.error || ("Ошибка " + res.status));
   return data;
 }
+const JSON_HDR = { "Content-Type": "application/json" };
 
 /* ───── тема ───── */
 function applyTheme(t) {
@@ -391,9 +480,7 @@ applyTheme(localStorage.getItem("es-theme") || "dark");
 
 /* ───── окно ───── */
 [["winMin", "minimize"], ["winMax", "maximize"], ["winClose", "close"]].forEach(([id, action]) => {
-  $(id).onclick = () => api("/api/window", {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }),
-  }).catch(() => {});
+  $(id).onclick = () => api("/api/window", { method: "POST", headers: JSON_HDR, body: JSON.stringify({ action }) }).catch(() => {});
 });
 
 /* ───── навигация ───── */
@@ -405,6 +492,7 @@ function showView(name) {
   document.querySelector(".bottombar").classList.toggle("hidden", name !== "create");
   document.querySelector(".main").style.gridColumn = name === "create" ? "2" : "2 / 4";
   if (name === "packs") loadPacks();
+  if (name === "settings") loadFonts();
 }
 document.querySelectorAll(".nav button").forEach((b) => b.onclick = () => showView(b.dataset.view));
 $("goSettings").onclick = (e) => { e.preventDefault(); showView("settings"); };
@@ -416,54 +504,71 @@ async function loadState() {
   $("botName").textContent = STATE.bot_username ? "@" + STATE.bot_username + " →" : "имя не задано";
   $("botLink").href = STATE.bot_username ? "https://t.me/" + STATE.bot_username : "#";
   $("botToken").placeholder = STATE.has_token ? "Токен сохранён (введите новый, чтобы заменить)" : "123456:ABC…";
-  $("readyCount").textContent = `${STATE.ready_count} из ${STATE.total} доступно`;
+  $("readyCount").innerHTML = `<b>${STATE.ready_count}</b> из ${STATE.total} доступно`;
   $("emptyBox").classList.toggle("hidden", STATE.ready_count > 0);
   $("ver").textContent = STATE.version || "1.0.0";
+  $("fontScale").value = Math.round((STATE.font_scale || 1) * 100);
+  $("fontScaleOut").textContent = $("fontScale").value + "%";
   updateNick();
-  renderSwatches();
+  renderNickColors();
   renderPicker();
   updateModes();
 }
 
-function renderSwatches() {
-  const box = $("nickSw");
-  box.innerHTML = "";
-  const orig = document.createElement("button");
-  orig.className = "sw orig" + (SEL.nick === "original" ? " sel" : "");
-  orig.title = "Как в оригинале";
-  orig.onclick = () => { SEL.nick = "original"; renderSwatches(); };
-  box.appendChild(orig);
-  STATE.palette.forEach((p) => {
-    const b = document.createElement("button");
-    b.className = "sw" + (SEL.nick === p.hex ? " sel" : "");
-    b.style.background = p.hex;
-    b.title = p.label + " " + p.hex;
-    b.onclick = () => { SEL.nick = p.hex; renderSwatches(); };
-    box.appendChild(b);
-  });
-  const more = document.createElement("label");
-  more.className = "sw more";
-  more.title = "Свой цвет";
-  more.textContent = "⋯";
-  const picker = document.createElement("input");
-  picker.type = "color";
-  picker.value = SEL.nick !== "original" ? SEL.nick : "#ffffff";
-  picker.oninput = (e) => { SEL.nick = e.target.value; renderSwatches(); };
-  more.appendChild(picker);
-  box.appendChild(more);
-}
-
+/* ───── цвет эмодзи: три карточки ───── */
 function updateModes() {
-  document.querySelectorAll(".opt[data-mode]").forEach((b) => b.classList.toggle("sel", b.dataset.mode === SEL.mode));
-  $("bodyB").style.display = SEL.mode === "grad" ? "" : "none";
+  document.querySelectorAll(".mode").forEach((b) => b.classList.toggle("sel", b.dataset.mode === SEL.mode));
+  $("thumbOne").style.setProperty("--c1", SEL.bodyA);
+  $("thumbGrad").style.setProperty("--c1", SEL.gradA);
+  $("thumbGrad").style.setProperty("--c2", SEL.bodyB);
+  $("swOne").style.background = SEL.bodyA;
+  $("swA").style.background = SEL.gradA;
+  $("swB").style.background = SEL.bodyB;
 }
-document.querySelectorAll(".opt[data-mode]").forEach((b) => b.onclick = (e) => {
+document.querySelectorAll(".mode").forEach((b) => b.onclick = (e) => {
   if (e.target.tagName === "INPUT") return;
   SEL.mode = b.dataset.mode;
   updateModes();
 });
 $("bodyA").oninput = (e) => { SEL.bodyA = e.target.value; SEL.mode = "one"; updateModes(); };
+$("gradA").oninput = (e) => { SEL.gradA = e.target.value; SEL.mode = "grad"; updateModes(); };
 $("bodyB").oninput = (e) => { SEL.bodyB = e.target.value; SEL.mode = "grad"; updateModes(); };
+$("bodyA").onclick = () => { SEL.mode = "one"; updateModes(); };
+$("gradA").onclick = () => { SEL.mode = "grad"; updateModes(); };
+$("bodyB").onclick = () => { SEL.mode = "grad"; updateModes(); };
+
+/* ───── цвет текста ника ───── */
+function renderNickColors() {
+  const box = $("nickSw");
+  box.innerHTML = "";
+  const orig = document.createElement("button");
+  orig.className = "chip-orig" + (SEL.nick === "original" ? " sel" : "");
+  orig.textContent = "Оригинал";
+  orig.title = "Цвет букв как в исходнике";
+  orig.onclick = () => { SEL.nick = "original"; renderNickColors(); };
+  box.appendChild(orig);
+  const sep = document.createElement("span");
+  sep.className = "sep";
+  box.appendChild(sep);
+  STATE.palette.forEach((p) => {
+    const b = document.createElement("button");
+    b.className = "sw" + (SEL.nick === p.hex ? " sel" : "");
+    b.style.background = p.hex;
+    b.title = p.label;
+    b.onclick = () => { SEL.nick = p.hex; renderNickColors(); };
+    box.appendChild(b);
+  });
+  const more = document.createElement("label");
+  more.className = "sw more";
+  more.title = "Свой цвет";
+  more.innerHTML = "<span>＋</span>";
+  const picker = document.createElement("input");
+  picker.type = "color";
+  picker.value = SEL.nick !== "original" ? SEL.nick : "#ffffff";
+  picker.oninput = (e) => { SEL.nick = e.target.value; renderNickColors(); };
+  more.appendChild(picker);
+  box.appendChild(more);
+}
 
 /* ───── ник ───── */
 function updateNick() {
@@ -514,9 +619,7 @@ function renderPicker() {
   grid.innerHTML = "";
   const cal = STATE.sources.filter((s) => s.ready && s.calibrated).length;
   const uncal = STATE.sources.filter((s) => s.ready && !s.calibrated).length;
-  $("calNote").textContent = uncal
-    ? `${cal} откалиброваны и выбраны по умолчанию. ${uncal} без калибровки: выбирайте их вручную.`
-    : (cal ? `Все ${cal} эмодзи откалиброваны.` : "");
+  $("calNote").textContent = uncal ? `${cal} откалиброваны · ${uncal} без калибровки` : (cal ? `все ${cal} откалиброваны` : "");
   STATE.sources.forEach((s) => {
     const tile = document.createElement("label");
     tile.className = "tile" + (s.ready ? " on" : " off");
@@ -551,11 +654,60 @@ function setAllTiles(on) {
 $("selAll").onclick = () => setAllTiles(true);
 $("selNone").onclick = () => setAllTiles(false);
 
+/* ───── шрифт ───── */
+async function loadFonts() {
+  const sel = $("fontSel");
+  if (sel.dataset.loaded) { sel.value = STATE.font_path || ""; return; }
+  try {
+    const r = await api("/api/fonts");
+    sel.innerHTML = "";
+    const def = document.createElement("option");
+    def.value = ""; def.textContent = "Встроенный шрифт (по умолчанию)";
+    sel.appendChild(def);
+    r.fonts.forEach((f) => {
+      const o = document.createElement("option");
+      o.value = f.path; o.textContent = f.name;
+      sel.appendChild(o);
+    });
+    sel.dataset.loaded = "1";
+    sel.value = STATE.font_path || "";
+  } catch (e) { setMsg($("fontMsg"), e.message, "err"); }
+}
+$("fontSel").onchange = async () => {
+  try {
+    await api("/api/settings", { method: "POST", headers: JSON_HDR, body: JSON.stringify({ font_path: $("fontSel").value }) });
+    setMsg($("fontMsg"), "Шрифт сохранён.", "ok");
+    await loadState();
+  } catch (e) { setMsg($("fontMsg"), e.message, "err"); }
+};
+$("fontScale").oninput = () => { $("fontScaleOut").textContent = $("fontScale").value + "%"; };
+$("fontScale").onchange = async () => {
+  try {
+    await api("/api/settings", { method: "POST", headers: JSON_HDR, body: JSON.stringify({ font_scale: $("fontScale").value / 100 }) });
+    setMsg($("fontMsg"), "Размер сохранён.", "ok");
+    await loadState();
+  } catch (e) { setMsg($("fontMsg"), e.message, "err"); }
+};
+$("fontUploadBtn").onclick = () => $("fontFile").click();
+$("fontFile").onchange = async () => {
+  const f = $("fontFile").files[0];
+  if (!f) return;
+  setMsg($("fontMsg"), "Загружаем шрифт…");
+  try {
+    const r = await api("/api/font-upload", { method: "POST", headers: { "Content-Type": "application/octet-stream", "X-Filename": encodeURIComponent(f.name) }, body: f });
+    setMsg($("fontMsg"), `Шрифт «${r.name}» добавлен и выбран.`, "ok");
+    sel_reset();
+    await loadState();
+  } catch (e) { setMsg($("fontMsg"), e.message, "err"); }
+  $("fontFile").value = "";
+};
+function sel_reset() { $("fontSel").dataset.loaded = ""; loadFonts(); }
+
 /* ───── Telegram ───── */
 $("saveBotName").onclick = async () => {
   const username = $("botUsername").value.trim().replace(/^@/, "");
   try {
-    await api("/api/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ bot_username: username }) });
+    await api("/api/settings", { method: "POST", headers: JSON_HDR, body: JSON.stringify({ bot_username: username }) });
     await loadState();
     setMsg($("tgMsg"), "Имя бота сохранено.", "ok");
   } catch (e) { setMsg($("tgMsg"), e.message, "err"); }
@@ -565,7 +717,7 @@ $("saveBot").onclick = async () => {
   const token = $("botToken").value.trim();
   if (!token) { setMsg($("tgMsg"), "Вставьте токен бота.", "err"); return; }
   try {
-    await api("/api/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ bot_token: token }) });
+    await api("/api/settings", { method: "POST", headers: JSON_HDR, body: JSON.stringify({ bot_token: token }) });
     $("botToken").value = "";
     await loadState();
     setMsg($("tgMsg"), "Токен сохранён.", "ok");
@@ -577,7 +729,7 @@ $("fetchTg").onclick = async () => {
   btn.disabled = true;
   setMsg($("importMsg"), "Загружаем исходники из Telegram… это займёт до минуты.");
   try {
-    const r = await api("/api/fetch-sources", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    const r = await api("/api/fetch-sources", { method: "POST", headers: JSON_HDR, body: "{}" });
     setMsg($("importMsg"), `Загружено: ${r.added.length}. Не найдено: ${r.missing.length}.` + (r.missing.length ? " " + r.missing.join(", ") : ""), r.missing.length ? "err" : "ok");
     await loadState();
   } catch (e) {
@@ -624,7 +776,7 @@ async function handleFiles(files) {
 /* ───── генерация ───── */
 function bodySpec() {
   if (SEL.mode === "orig") return "original";
-  if (SEL.mode === "grad") return SEL.bodyA + "|" + SEL.bodyB;
+  if (SEL.mode === "grad") return SEL.gradA + "|" + SEL.bodyB;
   return SEL.bodyA;
 }
 
@@ -640,7 +792,7 @@ $("gen").onclick = async () => {
   btn.textContent = "Создаём…";
   try {
     const r = await api("/api/generate", {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      method: "POST", headers: JSON_HDR,
       body: JSON.stringify({ nick, color: bodySpec(), nick_color: SEL.nick, ids }),
     });
     const real = r.failed.filter((f) => !f.error.startsWith("сохранено, но"));
@@ -665,6 +817,7 @@ function showResult(dir, fileName) {
   ["pvImg", "pvVid", "pvAnim", "pvDefault"].forEach((id) => $(id).classList.add("hidden"));
   $("pvAnim").innerHTML = "";
   $("pvHint").textContent = fileName;
+  $("pvTag").textContent = "результат";
   const ext = fileName.split(".").pop().toLowerCase();
   if (ext === "webp") { $("pvImg").src = url; $("pvImg").classList.remove("hidden"); }
   else if (ext === "webm") { $("pvVid").src = url; $("pvVid").classList.remove("hidden"); }
@@ -676,13 +829,9 @@ function showResult(dir, fileName) {
 
 /* ───── папка и пак ───── */
 function openDir(dir) {
-  return api("/api/open-output", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ dir: dir || "" }),
-  });
+  return api("/api/open-output", { method: "POST", headers: JSON_HDR, body: JSON.stringify({ dir: dir || "" }) });
 }
 $("openFolder").onclick = () => openDir($("openFolder").dataset.dir || "").catch((e) => setMsg($("genMsg"), e.message, "err"));
-$("expand").onclick = () => $("stage").scrollIntoView({ block: "center" });
 $("packBtn").onclick = () => {
   if (STATE && STATE.bot_username) window.open("https://t.me/" + STATE.bot_username, "_blank");
   else showView("settings");
