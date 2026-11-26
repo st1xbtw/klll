@@ -139,6 +139,8 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(body)
         elif path == "/api/state":
             self._json(200, state())
+        elif path == "/api/packs":
+            self._json(200, {"packs": list_packs()})
         elif path.startswith("/assets/"):
             name = Path(path[len("/assets/"):]).name
             f = ASSETS_DIR / name
@@ -211,6 +213,15 @@ class Handler(BaseHTTPRequestHandler):
                 todo = [i for i in wanted if i not in have]
                 result = telegram_fetch.fetch_sources(token, todo) if todo else {"added": [], "missing": []}
                 self._json(200, result)
+            elif path == "/api/window":
+                req = json.loads(self._body(MAX_JSON) or b"{}")
+                action = str(req.get("action", ""))
+                if action not in ("minimize", "maximize", "close"):
+                    raise ValueError("Неизвестное действие окна")
+                if WINDOW_API.window is None:
+                    raise ValueError("Окно управляется системой (открыто в браузере)")
+                getattr(WINDOW_API, action)()
+                self._json(200, {"ok": True})
             elif path == "/api/open-output":
                 req = json.loads(self._body(MAX_JSON) or b"{}")
                 name = Path(str(req.get("dir", ""))).name
@@ -255,6 +266,50 @@ class Handler(BaseHTTPRequestHandler):
         })
 
 
+def output_dir(name) -> Path:
+    name = Path(str(name)).name
+    target = config.OUTPUT_DIR / name if name else config.OUTPUT_DIR
+    if not name or not target.is_dir() or target.parent != config.OUTPUT_DIR:
+        raise ValueError("Папка результата не найдена")
+    return target
+
+
+def list_packs() -> list[dict]:
+    out = []
+    if not config.OUTPUT_DIR.is_dir():
+        return out
+    for d in sorted(config.OUTPUT_DIR.iterdir(), reverse=True):
+        if not d.is_dir():
+            continue
+        files = [f for f in d.iterdir() if f.suffix.lower() in (".tgs", ".webm", ".webp")]
+        out.append({
+            "dir": d.name,
+            "title": d.name.split("_", 1)[-1] if "_" in d.name else d.name,
+            "date": d.name.split("_", 1)[0],
+            "count": len(files),
+        })
+    return out
+
+
+class WindowApi:
+    """Кнопки окна в шапке. Работают только в окне pywebview."""
+
+    def __init__(self):
+        self.window = None
+
+    def minimize(self):
+        self.window.minimize()
+
+    def maximize(self):
+        self.window.toggle_fullscreen()
+
+    def close(self):
+        self.window.destroy()
+
+
+WINDOW_API = WindowApi()
+
+
 def pick_server() -> ThreadingHTTPServer:
     for port in PORTS:
         try:
@@ -283,8 +338,9 @@ def main() -> None:
         return
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
-        webview.create_window("Emoji Studio", url, width=1280, height=820, min_size=(980, 640),
-                              background_color="#0b0a12")
+        WINDOW_API.window = webview.create_window("Emoji Studio", url, width=1280, height=820,
+                                                  min_size=(980, 640), background_color="#0b0a12",
+                                                  js_api=WINDOW_API)
         webview.start()
     finally:
         server.shutdown()

@@ -617,6 +617,184 @@ def tint_from_spec(spec: str) -> Tint:
     return make_tint(parse_hex(spec))
 
 
+
+def iter_shape_layers(data: dict):
+    """Все слои-фигуры (ty=4) с их полной матрицей, включая предкомпозиции (assets, ty=0)."""
+    assets = {a["id"]: a for a in data.get("assets", []) if isinstance(a, dict) and "id" in a and "layers" in a}
+
+    def rec(layers: list, base, depth: int):
+        by_ind = {int(l["ind"]): l for l in layers if isinstance(l, dict) and "ind" in l}
+        for layer in layers:
+            if not isinstance(layer, dict):
+                continue
+            local = _layer_affine(layer, by_ind)
+            aff = _compose(base, local) if base is not None else local
+            ty = layer.get("ty")
+            if ty == 4:
+                yield layer, aff
+            elif ty == 0 and depth < 6:
+                asset = assets.get(layer.get("refId"))
+                if asset is not None:
+                    yield from rec([l for l in asset["layers"] if isinstance(l, dict)], aff, depth + 1)
+
+    yield from rec(data.get("layers", []), None, 0)
+
+
+_IDENT = (1.0, 1.0, 0.0, 0.0)
+
+
+def _letter_bands(shapes: list, aff: tuple, w: float, h: float) -> list:
+    """Пятибуквенные полосы: группы N, у которых ровно 5 дочерних групп-букв в одной строке.
+
+    Возвращает список (N, kids, global_bbox, inner_bbox). Внутренний bbox — в системе координат N
+    (без её собственного tr), поэтому новый ник, вставленный внутрь N, движется вместе с буквами.
+    """
+    out: list = []
+    tol_y = 0.03 * max(w, h)
+    max_h = 0.25 * max(w, h)
+
+    def visit(items: list, gaff_parent: tuple, depth: int) -> None:
+        if depth > 32:
+            return
+        for it in items:
+            if not (isinstance(it, dict) and it.get("ty") == "gr"):
+                continue
+            tr = next((x for x in it.get("it", []) if isinstance(x, dict) and x.get("ty") == "tr"), None)
+            gaff = _compose(gaff_parent, _affine_from(tr)) if tr else gaff_parent
+            kids = []
+            for c in it.get("it", []):
+                if isinstance(c, dict) and c.get("ty") == "gr":
+                    gpts: list = []
+                    _collect([c], gaff, gpts)
+                    ipts: list = []
+                    _collect([c], _IDENT, ipts)
+                    gb, ib = _bbox(gpts), _bbox(ipts)
+                    if gb and ib and ib[2] > ib[0]:
+                        kids.append((c, gb, ib))
+            if len(kids) >= 5:
+                kids.sort(key=lambda t: t[2][0])
+                band = [kids[0]]
+                for k in kids[1:]:
+                    ref = band[0][2]
+                    ib = k[2]
+                    if abs(ib[1] - ref[1]) < tol_y and abs(ib[3] - ref[3]) < tol_y and (ib[3] - ib[1]) <= max_h:
+                        band.append(k)
+                if len(band) == 5:
+                    gU = (min(b[1][0] for b in band), min(b[1][1] for b in band),
+                          max(b[1][2] for b in band), max(b[1][3] for b in band))
+                    iU = (min(b[2][0] for b in band), min(b[2][1] for b in band),
+                          max(b[2][2] for b in band), max(b[2][3] for b in band))
+                    out.append((it, [b[0] for b in band], gU, iU))
+            visit(it.get("it", []), gaff, depth + 1)
+
+    visit(shapes, aff, 0)
+    return out
+
+
+def letter_band_layers(data: dict) -> list:
+    """Слои-фигуры в фиксированном порядке (тот же, что у iter_shape_layers) и их полосы."""
+    w = float(data.get("w", 512))
+    h = float(data.get("h", 512))
+    return [(li, layer, _letter_bands(layer.get("shapes", []), aff, w, h))
+            for li, (layer, aff) in enumerate(iter_shape_layers(data))]
+
+
+def _letters_fill(kids: list):
+    """Цвет заливки букв LOVEX (первый статичный fl в их поддереве), 0..255 — или None."""
+    stack = list(kids)
+    while stack:
+        it = stack.pop(0)
+        if not isinstance(it, dict):
+            continue
+        if it.get("ty") == "fl":
+            k = (it.get("c") or {}).get("k")
+            if isinstance(k, list) and len(k) >= 3 and all(isinstance(x, (int, float)) for x in k[:3]):
+                return [x * 255 for x in k[:3]]
+        stack.extend(it.get("it", []))
+    return None
+
+
+def apply_letter_bands(data: dict, pairs: list, nick: str, tint: Tint) -> int:
+    """Для каждой пары (layer_index, band_index): удаляет буквы LOVEX по ссылке и ставит ник внутрь той же группы."""
+    layers = {li: (layer, bands) for li, layer, bands in letter_band_layers(data)}
+    targets = []
+    for li, bi in pairs:
+        if li not in layers:
+            raise TgsError(f"Нет слоя {li}")
+        bands = layers[li][1]
+        if bi >= len(bands):
+            raise TgsError(f"Нет полосы {bi} в слое {li}")
+        targets.append(bands[bi])
+    removed = 0
+    for N, kids, _gbox, ibox in targets:
+        keep = [x for x in N.get("it", []) if not any(x is k for k in kids)]
+        removed += len(N.get("it", [])) - len(keep)
+        N["it"] = keep
+        x0, y0, x1, y1 = ibox
+        cx = (x0 + x1) / 2
+        half = max((x1 - x0) / 2 * 1.04, 0.3 * 512)
+        padv = (y1 - y0) * 0.1
+        region = (cx - half, y0 - padv, cx + half, y1 + padv)
+        items = _nick_shape_items(nick, region)
+        col = _letters_fill(kids) or _letters_fill([x for x in N.get('it', []) if isinstance(x, dict) and x.get('ty') == 'fl']) or tint.text
+        r, g, b = (c / 255 for c in col) if max(col) > 1 else col[:3]
+        wrapper = {
+            "ty": "gr", "nm": "nick",
+            "it": items + [
+                {"ty": "fl", "c": {"a": 0, "k": [r, g, b, 1]}, "o": {"a": 0, "k": 100},
+                 "r": 1, "bm": 0, "nm": "Fill"},
+                {"ty": "tr", "p": {"a": 0, "k": [0, 0]}, "a": {"a": 0, "k": [0, 0]},
+                 "s": {"a": 0, "k": [100, 100]}, "r": {"a": 0, "k": 0},
+                 "o": {"a": 0, "k": 100}, "sk": {"a": 0, "k": 0}, "sa": {"a": 0, "k": 0}},
+            ],
+        }
+        its = N.setdefault("it", [])
+        if its and isinstance(its[-1], dict) and its[-1].get("ty") == "tr":
+            its.insert(len(its) - 1, wrapper)
+        else:
+            its.append(wrapper)
+    return removed
+
+
+def _strip_in_boxes(data: dict, boxes: list) -> int:
+    """Удаляет группы-буквы внутри заданных прямоугольников (доли кадра x0,y0,x1,y1).
+
+    Группа удаляется, если её bbox целиком лежит в прямоугольнике (с допуском 1%).
+    Работает на любой вложенности групп; остальной арт не трогается.
+    """
+    w = float(data.get("w", 512))
+    h = float(data.get("h", 512))
+    pxboxes = [(b[0] * w, b[1] * h, b[2] * w, b[3] * h) for b in boxes]
+    tol = 0.01 * max(w, h)
+    removed = 0
+
+    def inside(bb: tuple) -> bool:
+        return any(bb[0] >= b[0] - tol and bb[1] >= b[1] - tol and bb[2] <= b[2] + tol and bb[3] <= b[3] + tol
+                   for b in pxboxes)
+
+    def visit(items: list, aff: tuple, depth: int) -> list:
+        nonlocal removed
+        if depth > 32:
+            return items
+        keep = []
+        for it in items:
+            if isinstance(it, dict) and it.get("ty") == "gr":
+                pts: list = []
+                _collect([it], aff, pts)
+                bb = _bbox(pts)
+                if bb and inside(bb):
+                    removed += 1
+                    continue
+                tr = next((x for x in it.get("it", []) if isinstance(x, dict) and x.get("ty") == "tr"), None)
+                gaff = _compose(aff, _affine_from(tr)) if tr else aff
+                it["it"] = visit(it.get("it", []), gaff, depth + 1)
+            keep.append(it)
+        return keep
+
+    for layer, aff in list(iter_shape_layers(data)):
+        layer["shapes"] = visit(layer.get("shapes", []), aff, 0)
+    return removed
+
 def recolor_tgs(src: Path, dst: Path, nick: str, color_hex: str | None,
                 nick_hex: str | None = None) -> int:
     """Заменяет ник.
@@ -643,18 +821,25 @@ def recolor_tgs(src: Path, dst: Path, nick: str, color_hex: str | None,
     else:
         rgb = parse_hex(nick_hex)
         nick_tint = Tint(rgb, rgb, rgb)
-    region = config.NICK_OVERRIDES.get(src.stem, config.NICK_SEARCH_REGION)
-    bbox, removed = _strip_nick(data, region)
-    box = config.NICK_BOXES.get(src.stem)
-    if box:
-        bw, bh = float(data.get("w", 512)), float(data.get("h", 512))
-        bbox = (box[0] * bw, box[1] * bh, box[2] * bw, box[3] * bh)
-    if not removed:
-        log.warning("Старый ник в %s не найден — новый ник будет добавлен в NICK_REGION", src.name)
-    placed = _place_nick(data, nick, nick_tint, bbox)
-    _purge_slots(data)
-    if not placed:
-        _add_nick_layer(data, nick, nick_tint, bbox)
+    bands = config.LOVEX_BANDS.get(src.stem)
+    if bands:
+        # буквы LOVEX — отдельные группы внутри полосы; ник ставится внутрь той же группы
+        removed = apply_letter_bands(data, [tuple(p) for p in bands], nick, nick_tint)
+    elif src.stem in config.EXTRA_IDS:
+        removed = 0  # новые эмодзи без найденной полосы LOVEX: надписи не трогаем, ник не ставим
+    else:
+        region = config.NICK_OVERRIDES.get(src.stem, config.NICK_SEARCH_REGION)
+        bbox, removed = _strip_nick(data, region)
+        box = config.NICK_BOXES.get(src.stem)
+        if box:
+            bw, bh = float(data.get("w", 512)), float(data.get("h", 512))
+            bbox = (box[0] * bw, box[1] * bh, box[2] * bw, box[3] * bh)
+        if not removed:
+            log.warning("Старый ник в %s не найден — новый ник будет добавлен в NICK_REGION", src.name)
+        placed = _place_nick(data, nick, nick_tint, bbox)
+        _purge_slots(data)
+        if not placed:
+            _add_nick_layer(data, nick, nick_tint, bbox)
     _limit(data)
 
     for nd, slim in ((3, False), (2, False), (2, True)):
