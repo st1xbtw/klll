@@ -141,13 +141,13 @@
     </nav>
 
     <div class="side-block" style="margin-top:auto">
-      <label for="botName">Имя вашего бота (без @)</label>
+      <label for="botToken">Токен вашего бота (от @BotFather)</label>
       <div class="row">
-        <input type="text" id="botName" placeholder="YourBot">
-        <button class="link" id="saveBot" title="Сохранить">💾</button>
+        <input type="password" id="botToken" placeholder="123456:ABC…">
+        <button class="link" id="saveBot" title="Сохранить токен">💾</button>
       </div>
       <div class="msg" id="tgMsg"></div>
-      <button class="link" id="promoGo" style="margin-top:6px">Открыть бота в Telegram →</button>
+      <div class="hint" style="font-size:11.5px;color:var(--muted);margin-top:6px">Токен хранится только на вашем ПК.</div>
     </div>
 
     <div class="theme" id="themeToggle" title="Переключить тему">
@@ -190,15 +190,15 @@
 
           <div class="drop" id="drop">
             <div class="ico">⤓</div>
-            <div>Перетащите архив с исходниками
-              <small>Получить его: <button class="link" id="openTg">скопировать ID и открыть бота в Telegram</button></small>
+            <div>Перетащите архив с исходниками (или zip от бота)
+              <small><button class="link" id="fetchTg">Загрузить из Telegram по токену</button> · <button class="link" id="openTg">скопировать ID и открыть бота</button></small>
             </div>
           </div>
           <input type="file" id="file" multiple accept=".zip,.tgs,.webp,.webm" hidden>
           <div class="msg" id="importMsg"></div>
 
           <div class="empty hidden" id="emptyBox">
-            <b>Исходники ещё не импортированы.</b> Эмодзи ниже появятся, когда вы перетащите сюда zip-архив от бота.
+            <b>Исходники ещё не загружены.</b> Укажите токен бота слева и нажмите «Загрузить из Telegram по токену», либо перетащите zip-архив.
           </div>
           <div class="grid" id="pickGrid"></div>
         </div>
@@ -302,7 +302,7 @@ document.querySelectorAll("nav button").forEach(b => b.onclick = () => showView(
 /* ───── состояние ───── */
 async function loadState() {
   STATE = await api("/api/state");
-  $("botName").value = STATE.bot_username || "";
+  $("botToken").placeholder = STATE.has_token ? "Токен сохранён (введите новый, чтобы заменить)" : "123456:ABC…";
   $("readyCount").textContent = `(${STATE.ready_count} из ${STATE.total} доступно)`;
   $("emptyBox").classList.toggle("hidden", STATE.ready_count > 0);
   $("ver").textContent = STATE.version || "1.0.0";
@@ -374,22 +374,36 @@ $("selAll").onclick = () => {
 
 /* ───── Telegram ───── */
 $("saveBot").onclick = async () => {
+  const token = $("botToken").value.trim();
+  if (!token) { setMsg($("tgMsg"), "Вставьте токен бота.", "err"); return; }
   try {
-    const r = await api("/api/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ bot_username: $("botName").value }) });
-    $("botName").value = r.bot_username || "";
-    setMsg($("tgMsg"), "Имя бота сохранено.", "ok");
+    await api("/api/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ bot_token: token }) });
+    $("botToken").value = "";
+    await loadState();
+    setMsg($("tgMsg"), "Токен сохранён.", "ok");
   } catch (e) { setMsg($("tgMsg"), e.message, "err"); }
 };
 
+$("fetchTg").onclick = async () => {
+  const btn = $("fetchTg");
+  btn.disabled = true;
+  setMsg($("importMsg"), "Загружаем исходники из Telegram… это займёт до минуты.");
+  try {
+    const r = await api("/api/fetch-sources", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    setMsg($("importMsg"), `Загружено: ${r.added.length}. Не найдено: ${r.missing.length}.` + (r.missing.length ? " " + r.missing.join(", ") : ""), r.missing.length ? "err" : "ok");
+    await loadState();
+  } catch (e) {
+    setMsg($("importMsg"), e.message, "err");
+  } finally {
+    btn.disabled = false;
+  }
+};
+
 async function openTelegram() {
-  const name = $("botName").value.trim().replace(/^@/, "");
-  if (!name) { setMsg($("tgMsg"), "Сначала укажите имя бота и нажмите 💾.", "err"); return; }
   try { await navigator.clipboard.writeText(STATE.ids_text); } catch (e) {}
-  window.open("https://t.me/" + name, "_blank");
   setMsg($("importMsg"), `Скопировано ${STATE.total} ID. Вставьте их в чат с ботом.`, "ok");
 }
 $("openTg").onclick = openTelegram;
-$("promoGo").onclick = openTelegram;
 
 /* ───── импорт ───── */
 const drop = $("drop"), file = $("file");

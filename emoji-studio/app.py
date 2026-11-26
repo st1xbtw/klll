@@ -22,7 +22,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
-from emoji_studio import config, generator, sources  # noqa: E402
+from emoji_studio import config, generator, sources, telegram_fetch  # noqa: E402
 
 WEB_INDEX = config.BUNDLE_DIR / "web" / "index.html"
 ASSETS_DIR = config.BUNDLE_DIR / "web" / "assets"
@@ -64,6 +64,7 @@ def state() -> dict:
         "palette": [{"key": k, "label": label, "hex": hx} for k, label, hx in config.PALETTE],
         "nick_max": config.NICK_MAX_LEN,
         "bot_username": settings.get("bot_username", ""),
+        "has_token": bool(settings.get("bot_token")),
         "ffmpeg": shutil.which(config.FFMPEG) is not None,
         "output_dir": str(config.OUTPUT_DIR),
         "version": config.APP_VERSION,
@@ -172,8 +173,29 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("Некорректное имя бота")
                 settings = load_settings()
                 settings["bot_username"] = username
+                if "bot_token" in req:
+                    token = str(req.get("bot_token") or "").strip()
+                    if token and not telegram_fetch.valid_token(token):
+                        raise ValueError("Некорректный токен бота (формат 123456:ABC…)")
+                    if token:
+                        settings["bot_token"] = token
+                    else:
+                        settings.pop("bot_token", None)
                 save_settings(settings)
-                self._json(200, {"bot_username": username})
+                self._json(200, {"bot_username": username, "has_token": bool(settings.get("bot_token"))})
+            elif path == "/api/fetch-sources":
+                settings = load_settings()
+                token = settings.get("bot_token", "")
+                if not token:
+                    raise ValueError("Сначала укажите токен бота и нажмите «Сохранить»")
+                req = json.loads(self._body(MAX_JSON) or b"{}")
+                wanted = [str(i) for i in req.get("ids", [])] or config.ALL_IDS
+                if not all(re.fullmatch(r"\d{15,20}", i) for i in wanted):
+                    raise ValueError("Некорректный список эмодзи")
+                have = set(sources.scan())
+                todo = [i for i in wanted if i not in have]
+                result = telegram_fetch.fetch_sources(token, todo) if todo else {"added": [], "missing": []}
+                self._json(200, result)
             elif path == "/api/open-output":
                 req = json.loads(self._body(MAX_JSON) or b"{}")
                 name = Path(str(req.get("dir", ""))).name
@@ -188,6 +210,8 @@ class Handler(BaseHTTPRequestHandler):
             self._json(400, {"error": str(e)})
         except FileNotFoundError as e:
             self._json(400, {"error": f"Шрифт не найден: {e}"})
+        except telegram_fetch.TelegramError as e:
+            self._json(502, {"error": str(e)})
 
     def _generate(self, req: dict) -> None:
         nick = str(req.get("nick", "")).strip()
