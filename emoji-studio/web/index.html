@@ -1,153 +1,176 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Emoji Studio</title>
 <style>
   :root {
-    --bg: #0b0a12; --glass: rgba(24,20,38,.72); --glass2: rgba(18,15,30,.85);
-    --line: rgba(160,120,255,.18); --text: #f2eefc; --muted: #9a92b5;
-    --accent: #8b5cf6; --accent2: #b49cff; --ok: #4ade80; --bad: #ff6b8a; --warn: #ffb020;
+    --bg: #0b0a12; --glow-a: rgba(139,92,246,.34); --glow-b: rgba(110,60,220,.22);
+    --glass: rgba(24,20,38,.74); --line: rgba(160,120,255,.18);
+    --text: #f2eefc; --muted: #9a92b5; --field: rgba(0,0,0,.34); --tile: rgba(0,0,0,.30);
+    --accent: #8b5cf6; --accent-2: #b49cff; --ok: #4ade80; --bad: #ff6b8a; --warn: #ffb020;
+    --checker: rgba(255,255,255,.035); --shadow: 0 10px 40px rgba(0,0,0,.35);
+    color-scheme: dark;
+  }
+  [data-theme="light"] {
+    --bg: #f4f1fb; --glow-a: rgba(139,92,246,.20); --glow-b: rgba(200,170,255,.38);
+    --glass: rgba(255,255,255,.80); --line: rgba(110,70,210,.16);
+    --text: #1d1733; --muted: #6e6790; --field: rgba(255,255,255,.92); --tile: rgba(255,255,255,.9);
+    --accent: #7c4dff; --accent-2: #6d3fe0; --ok: #15803d; --bad: #c2284f; --warn: #b45309;
+    --checker: rgba(90,50,160,.06); --shadow: 0 10px 30px rgba(90,60,160,.12);
+    color-scheme: light;
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
   body {
-    margin: 0; color: var(--text); background:
-      radial-gradient(900px 600px at 80% -10%, rgba(139,92,246,.35), transparent 60%),
-      radial-gradient(700px 500px at 0% 110%, rgba(110,60,220,.25), transparent 60%),
-      var(--bg);
+    margin: 0; color: var(--text); overflow: hidden;
+    background: radial-gradient(900px 600px at 85% -10%, var(--glow-a), transparent 60%),
+                radial-gradient(700px 500px at 0% 110%, var(--glow-b), transparent 60%), var(--bg);
     font: 14px/1.45 "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
-    overflow: hidden;
   }
-  .app { display: grid; grid-template-columns: 230px 1fr; gap: 16px; height: 100vh; padding: 16px; }
+  .app { display: grid; grid-template-columns: 236px 1fr; gap: 16px; height: 100vh; padding: 16px; }
+  .hidden { display: none !important; }
 
   /* ─── сайдбар ─── */
-  aside { background: var(--glass); border: 1px solid var(--line); border-radius: 22px; padding: 22px 16px; display: flex; flex-direction: column; backdrop-filter: blur(14px); }
-  .logo { font-size: 26px; font-weight: 800; line-height: 1.05; padding: 4px 8px 22px; }
-  .logo span { color: var(--accent2); display: block; }
-  .logo .spark { color: var(--accent2); font-size: 22px; }
+  aside { background: var(--glass); border: 1px solid var(--line); border-radius: 22px; padding: 20px 14px; display: flex; flex-direction: column; gap: 6px; backdrop-filter: blur(14px); box-shadow: var(--shadow); min-height: 0; }
+  .brand { display: flex; align-items: center; gap: 12px; padding: 6px 8px 18px; }
+  .brand .mascot { width: 58px; height: 58px; border-radius: 18px; overflow: hidden; flex: none; background: #0b0a12; box-shadow: 0 0 0 1px var(--line), 0 8px 22px rgba(139,92,246,.35); }
+  .brand .mascot img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 38%; transform: scale(1.35); }
+  .brand .name { font-size: 20px; font-weight: 800; line-height: 1.05; }
+  .brand .name span { display: block; color: var(--accent-2); }
   nav { display: flex; flex-direction: column; gap: 6px; }
-  nav button { display: flex; align-items: center; gap: 12px; background: none; border: 0; color: var(--muted); font: inherit; text-align: left; padding: 12px 14px; border-radius: 14px; cursor: pointer; }
-  nav button:hover { color: var(--text); background: rgba(255,255,255,.04); }
-  nav button.active { color: #fff; background: linear-gradient(90deg, rgba(139,92,246,.9), rgba(110,60,220,.8)); box-shadow: 0 8px 24px rgba(139,92,246,.35); }
-  .promo { margin-top: auto; background: rgba(139,92,246,.12); border: 1px solid var(--line); border-radius: 16px; padding: 14px; display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
-  .promo button { margin-left: auto; width: 38px; height: 38px; border-radius: 12px; border: 0; background: var(--accent); color: #fff; font-size: 18px; cursor: pointer; flex: none; }
+  nav button { display: flex; align-items: center; gap: 10px; background: none; border: 0; color: var(--muted); font: inherit; text-align: left; padding: 12px 14px; border-radius: 14px; cursor: pointer; }
+  nav button:hover { color: var(--text); background: rgba(128,96,200,.08); }
+  nav button.active { color: #fff; background: linear-gradient(90deg, #9b6bff, #7a45ec); box-shadow: 0 8px 24px rgba(139,92,246,.35); }
+
+  .side-block { margin-top: auto; border: 1px solid var(--line); background: var(--field); border-radius: 16px; padding: 12px; }
+  .side-block label { display: block; color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+  .side-block .row { display: flex; gap: 6px; }
+  .side-block .msg { font-size: 12px; margin-top: 6px; color: var(--muted); }
+  .theme { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 14px; border: 1px solid var(--line); cursor: pointer; user-select: none; color: var(--muted); background: var(--field); }
+  .switch { width: 42px; height: 24px; border-radius: 14px; background: #3a3350; position: relative; transition: .2s; }
+  .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: .2s; }
+  [data-theme="light"] .switch { background: #cbbdf0; }
+  [data-theme="light"] .switch::after { left: 21px; }
 
   /* ─── основная часть ─── */
-  main { display: grid; grid-template-rows: 1fr auto; gap: 16px; min-height: 0; }
-  .top { display: grid; grid-template-columns: 1.25fr 1fr; gap: 16px; min-height: 0; }
-  .panel { background: var(--glass); border: 1px solid var(--line); border-radius: 22px; padding: 20px; backdrop-filter: blur(14px); min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
-  .panel h2 { font-size: 16px; margin: 0 0 14px; display: flex; align-items: center; gap: 8px; }
-  .panel h2 .count { color: var(--muted); font-weight: 400; font-size: 13px; }
-  .scroll { overflow: auto; min-height: 0; }
-  .field-row { display: grid; grid-template-columns: 110px 1fr; align-items: center; gap: 12px; margin: 12px 0; }
-  .field-row > label, .field-row > .lbl { color: var(--muted); }
-  input[type=text] { width: 100%; background: rgba(0,0,0,.35); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 11px 14px; font: inherit; outline: none; }
+  main { display: grid; grid-template-rows: minmax(0,1fr) auto; gap: 16px; min-height: 0; }
+  .top { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; min-height: 0; }
+  .panel { background: var(--glass); border: 1px solid var(--line); border-radius: 22px; padding: 20px; backdrop-filter: blur(14px); box-shadow: var(--shadow); min-height: 0; display: flex; flex-direction: column; }
+  .panel h2 { font-size: 15px; margin: 0 0 12px; font-weight: 600; }
+  .scroll { overflow: auto; min-height: 0; flex: 1; padding-right: 6px; }
+  .field-row { display: grid; grid-template-columns: 120px 1fr; align-items: center; gap: 12px; margin: 10px 0; }
+  .lbl { color: var(--muted); }
+  input[type=text] { width: 100%; background: var(--field); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 11px 14px; font: inherit; outline: none; }
   input[type=text]:focus { border-color: var(--accent); }
-  .icon-btn { background: rgba(255,255,255,.06); border: 1px solid var(--line); color: var(--text); border-radius: 10px; padding: 8px 10px; cursor: pointer; }
-  .inputline { display: flex; gap: 8px; }
   .swatches { display: flex; gap: 8px; flex-wrap: wrap; }
-  .sw { width: 30px; height: 30px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); }
-  .sw.sel { border-color: #fff; box-shadow: 0 0 0 3px rgba(139,92,246,.6); }
-  .sw.orig { background: conic-gradient(#fff 0 25%, #888 0 50%, #444 0 75%, #fff 0); font-size: 0; }
-  .toggle { display: inline-flex; align-items: center; gap: 10px; background: rgba(0,0,0,.3); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; cursor: pointer; user-select: none; }
-  .toggle i { width: 38px; height: 22px; border-radius: 12px; background: #3a3350; position: relative; transition: .2s; }
-  .toggle i::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: .2s; }
-  .toggle.on i { background: var(--accent); }
-  .toggle.on i::after { left: 19px; }
-  .emoji-head { display: flex; justify-content: space-between; align-items: center; margin: 14px 0 10px; }
-  .link { color: var(--accent2); background: none; border: 0; cursor: pointer; font: inherit; padding: 0; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; }
-  .tile { position: relative; border-radius: 14px; background: rgba(0,0,0,.35); border: 1px solid var(--line); padding: 10px 6px 8px; text-align: center; cursor: pointer; user-select: none; }
+  .sw { width: 30px; height: 30px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; box-shadow: inset 0 0 0 1px rgba(128,128,128,.25); }
+  .sw:hover { transform: scale(1.06); }
+  .sw.sel { border-color: var(--text); box-shadow: 0 0 0 3px rgba(139,92,246,.55); }
+  .sw.orig { background: conic-gradient(#fff 0 25%, #888 0 50%, #444 0 75%, #fff 0); }
+  .toggle { display: inline-flex; align-items: center; gap: 10px; border: 1px solid var(--line); background: var(--field); border-radius: 12px; padding: 8px 12px; cursor: pointer; user-select: none; color: var(--muted); }
+  .toggle .switch { width: 38px; height: 22px; }
+  .toggle .switch::after { width: 16px; height: 16px; }
+  .toggle.on { color: var(--text); }
+  .toggle.on .switch { background: var(--accent); }
+  .toggle.on .switch::after { left: 19px; }
+  .body-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+  .emoji-head { display: flex; justify-content: space-between; align-items: center; margin: 16px 0 10px; }
+  .emoji-head .count { color: var(--muted); font-weight: 400; margin-left: 6px; }
+  .link { color: var(--accent-2); background: none; border: 0; cursor: pointer; font: inherit; padding: 0; }
+  .empty { border: 1px dashed var(--line); border-radius: 16px; padding: 16px; margin-bottom: 12px; color: var(--muted); background: var(--field); }
+  .empty b { color: var(--text); }
+  .drop { border: 1.5px dashed rgba(139,92,246,.45); border-radius: 16px; padding: 14px 16px; display: flex; align-items: center; gap: 14px; cursor: pointer; background: var(--field); margin-bottom: 12px; }
+  .drop:hover, .drop.over { border-color: var(--accent); }
+  .drop .ico { font-size: 22px; color: var(--accent-2); width: 28px; text-align: center; }
+  .drop small { display: block; color: var(--muted); font-size: 12.5px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 10px; padding-bottom: 6px; }
+  .tile { position: relative; border-radius: 14px; background: var(--tile); border: 1px solid var(--line); padding: 12px 8px 10px; text-align: center; cursor: pointer; user-select: none; }
   .tile input { position: absolute; opacity: 0; pointer-events: none; }
-  .tile .mark { position: absolute; top: 6px; right: 6px; width: 18px; height: 18px; border-radius: 6px; background: rgba(0,0,0,.5); border: 1px solid var(--line); color: transparent; font-size: 12px; line-height: 16px; }
+  .tile .mark { position: absolute; top: 7px; right: 7px; width: 18px; height: 18px; border-radius: 6px; border: 1px solid var(--line); color: transparent; font-size: 12px; line-height: 16px; }
   .tile.on .mark { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .tile.off { opacity: .4; cursor: default; }
-  .tile .id { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .tile .kind { font-size: 11px; color: var(--accent2); margin-top: 4px; }
+  .tile.off { opacity: .45; cursor: default; }
+  .tile .id { color: var(--text); font-size: 11.5px; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tile .kind { font-size: 11px; color: var(--accent-2); margin-top: 4px; }
   .tile .kind.warn { color: var(--warn); }
-  .drop { margin-top: 12px; border: 1.5px dashed rgba(160,120,255,.35); border-radius: 16px; padding: 14px 16px; display: flex; align-items: center; gap: 14px; cursor: pointer; background: rgba(0,0,0,.2); }
-  .drop.over { border-color: var(--accent); }
-  .drop .ico { font-size: 22px; color: var(--accent2); }
-  .drop small { display: block; color: var(--muted); }
-  .msg { margin-top: 8px; font-size: 13px; color: var(--muted); }
+  .msg { margin-top: 8px; font-size: 13px; color: var(--muted); min-height: 18px; }
   .msg.ok { color: var(--ok); } .msg.err { color: var(--bad); }
 
   /* предпросмотр */
-  .preview { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: repeating-conic-gradient(rgba(255,255,255,.035) 0 25%, transparent 0 50%) 0 0/24px 24px; border-radius: 18px; }
-  .preview img { max-width: 70%; max-height: 70%; image-rendering: auto; filter: drop-shadow(0 0 24px rgba(139,92,246,.55)); }
-  .placeholder { width: 180px; height: 180px; border-radius: 40px; background: radial-gradient(circle at 50% 40%, rgba(139,92,246,.55), rgba(60,30,110,.3)); display: flex; align-items: center; justify-content: center; font-size: 56px; color: #fff; box-shadow: 0 0 60px rgba(139,92,246,.4); }
-  .badge { font-size: 13px; padding: 6px 14px; border-radius: 999px; background: rgba(74,222,128,.12); color: var(--ok); border: 1px solid rgba(74,222,128,.3); }
-  .badge.off { background: rgba(255,255,255,.05); color: var(--muted); border-color: var(--line); }
-  .pv-title { position: absolute; }
   .pv-head { display: flex; align-items: center; gap: 8px; }
-  .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--accent); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
+  .preview { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; border-radius: 18px; background-color: transparent; background-image: linear-gradient(45deg, var(--checker) 25%, transparent 25%), linear-gradient(-45deg, var(--checker) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, var(--checker) 75%), linear-gradient(-45deg, transparent 75%, var(--checker) 75%); background-size: 24px 24px; background-position: 0 0, 0 12px, 12px -12px, -12px 0; margin-top: 12px; padding: 16px; }
+  .pv-img { width: 62%; max-height: 66%; object-fit: contain; filter: drop-shadow(0 0 26px rgba(139,92,246,.45)); }
+  .badge { font-size: 13px; padding: 6px 14px; border-radius: 999px; background: rgba(74,222,128,.14); color: var(--ok); border: 1px solid rgba(74,222,128,.35); }
+  .badge.off { background: var(--field); color: var(--muted); border-color: var(--line); }
 
   /* нижняя панель */
-  .bottom { display: grid; grid-template-columns: 1.1fr auto 1fr; gap: 16px; align-items: stretch; }
-  .howto, .result { background: var(--glass); border: 1px solid var(--line); border-radius: 20px; padding: 16px 18px; backdrop-filter: blur(14px); }
-  .howto h3, .result h3 { margin: 0 0 6px; font-size: 14px; display: flex; gap: 8px; align-items: center; }
-  .howto p { margin: 0; color: var(--muted); font-size: 12.5px; }
-  .big { align-self: center; background: linear-gradient(90deg, #9b6bff, #7a45ec); color: #fff; border: 0; border-radius: 999px; padding: 18px 36px; font-weight: 600; font-size: 16px; font-family: inherit; cursor: pointer; box-shadow: 0 12px 40px rgba(139,92,246,.5); white-space: nowrap; }
-  .big:disabled { opacity: .5; cursor: default; }
+  .bottom { display: grid; grid-template-columns: 1fr auto 1fr; gap: 16px; align-items: stretch; }
+  .card { background: var(--glass); border: 1px solid var(--line); border-radius: 20px; padding: 16px 18px; backdrop-filter: blur(14px); box-shadow: var(--shadow); }
+  .card h3 { margin: 0 0 6px; font-size: 14px; display: flex; gap: 8px; align-items: center; }
+  .card p { margin: 0; color: var(--muted); font-size: 12.5px; }
+  .card code { color: var(--text); }
+  .big { align-self: center; background: linear-gradient(90deg, #9b6bff, #7a45ec); color: #fff; border: 0; border-radius: 999px; padding: 18px 34px; font-weight: 600; font-size: 16px; font-family: inherit; cursor: pointer; box-shadow: 0 12px 36px rgba(139,92,246,.45); white-space: nowrap; }
+  .big:disabled { opacity: .55; cursor: default; }
   .result .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .result code { color: var(--muted); font-size: 12px; word-break: break-all; }
-  .result .thumb { width: 54px; height: 54px; border-radius: 14px; background: rgba(0,0,0,.35); object-fit: contain; flex: none; }
+  .thumb { width: 54px; height: 54px; border-radius: 14px; background: var(--field); object-fit: contain; flex: none; }
   .failed { margin-top: 8px; font-size: 12px; color: var(--muted); max-height: 70px; overflow: auto; }
-  .hidden { display: none !important; }
-  .peek { position: absolute; top: -58px; left: 50%; transform: translateX(-50%); width: 230px; pointer-events: none; z-index: 2; opacity: .95; }
-  main { position: relative; }
-  .pv-img { width: 62%; max-height: 66%; object-fit: contain; filter: drop-shadow(0 0 26px rgba(139,92,246,.5)); }
 
-  /* вкладки-инструкции */
+  /* инструкции и о программе */
   .doc { line-height: 1.6; color: var(--muted); }
   .doc b { color: var(--text); }
   .doc ol { padding-left: 20px; }
   .doc h3 { color: var(--text); margin: 18px 0 6px; font-size: 15px; }
-  .doc code { background: rgba(0,0,0,.35); padding: 1px 6px; border-radius: 6px; color: var(--text); }
+  .doc code { background: var(--field); padding: 1px 6px; border-radius: 6px; color: var(--text); }
 </style>
 </head>
 <body>
 <div class="app">
   <aside>
-    <div class="logo"><span class="spark">✦</span><br>Emoji<span>Studio</span></div>
+    <div class="brand">
+      <div class="mascot"><img src="/assets/mascot_peek.png" alt=""></div>
+      <div class="name">Emoji<span>Studio</span></div>
+    </div>
     <nav>
       <button data-view="create" class="active">✦ Создание</button>
       <button data-view="guide">📖 Инструкция</button>
       <button data-view="about">ⓘ О приложении</button>
     </nav>
-    <div class="promo">
-      <div>Готовы к созданию своих эмодзи?</div>
-      <button id="promoGo" title="Открыть Telegram-бота">→</button>
+
+    <div class="side-block" style="margin-top:auto">
+      <label for="botName">Имя вашего бота (без @)</label>
+      <div class="row">
+        <input type="text" id="botName" placeholder="YourBot">
+        <button class="link" id="saveBot" title="Сохранить">💾</button>
+      </div>
+      <div class="msg" id="tgMsg"></div>
+      <button class="link" id="promoGo" style="margin-top:6px">Открыть бота в Telegram →</button>
+    </div>
+
+    <div class="theme" id="themeToggle" title="Переключить тему">
+      <span id="themeLabel">Светлая тема</span><span class="switch"></span>
     </div>
   </aside>
 
   <main>
-    <img class="peek" src="/assets/mascot_peek.png" alt="">
     <!-- ───── Создание ───── -->
     <div id="view-create" class="top">
       <div class="panel">
         <h2>Настройки</h2>
         <div class="scroll">
           <div class="field-row">
-            <div class="lbl">Ник бота <span title="Имя вашего Telegram-бота, нужно для выгрузки исходников">?</span></div>
-            <div class="inputline">
-              <input type="text" id="botName" placeholder="@YourBot">
-              <button class="icon-btn" id="saveBot" title="Сохранить имя бота">💾</button>
-            </div>
-          </div>
-
-          <div class="field-row">
-            <div class="lbl">Ник</div>
+            <div class="lbl">Введите ваш ник</div>
             <input type="text" id="nick" maxlength="15" placeholder="до 15 символов">
           </div>
 
           <div class="field-row">
             <div class="lbl">Цвет тела</div>
-            <div class="inputline" style="justify-content:space-between;align-items:center">
+            <div class="body-row">
               <div class="swatches" id="bodyA"></div>
-              <div class="toggle" id="gradToggle" title="Градиент: тёмные и светлые части разного цвета"><span>Градиент</span><i></i></div>
+              <div class="toggle" id="gradToggle" title="Тёмные и светлые части разного цвета"><span>Градиент</span><span class="switch"></span></div>
             </div>
           </div>
           <div class="field-row hidden" id="bodyBRow">
@@ -161,39 +184,43 @@
           </div>
 
           <div class="emoji-head">
-            <div>Выбор эмодзи <span id="readyCount" style="color:var(--muted)"></span></div>
+            <div>Выбор эмодзи <span class="count" id="readyCount"></span></div>
             <button class="link" id="selAll">Выбрать все</button>
           </div>
-          <div class="grid" id="pickGrid"></div>
 
           <div class="drop" id="drop">
             <div class="ico">⤓</div>
             <div>Перетащите архив с исходниками
-              <small>или получите его через Telegram-бота: <button class="link" id="openTg">Скопировать ID и открыть бота</button></small>
+              <small>Получить его: <button class="link" id="openTg">скопировать ID и открыть бота в Telegram</button></small>
             </div>
           </div>
           <input type="file" id="file" multiple accept=".zip,.tgs,.webp,.webm" hidden>
           <div class="msg" id="importMsg"></div>
+
+          <div class="empty hidden" id="emptyBox">
+            <b>Исходники ещё не импортированы.</b> Эмодзи ниже появятся, когда вы перетащите сюда zip-архив от бота.
+          </div>
+          <div class="grid" id="pickGrid"></div>
         </div>
       </div>
 
       <div class="panel">
         <div class="pv-head"><span class="dot"></span><b>Предпросмотр</b></div>
-        <div class="preview" id="preview" style="margin-top:14px">
+        <div class="preview">
           <img class="pv-img" id="pvDefault" src="/assets/mascot_preview.png" alt="">
-          <img id="pvImg" class="hidden" alt="">
+          <img class="pv-img hidden" id="pvImg" alt="">
           <span class="badge off" id="pvBadge">Ещё не создано</span>
         </div>
       </div>
     </div>
 
     <div id="view-create-bottom" class="bottom">
-      <div class="howto">
+      <div class="card">
         <h3>⚡ Как это работает?</h3>
         <p>Приложение заменит ник, перекрасит эмодзи и сохранит готовые файлы в папку <code>output/</code>.</p>
       </div>
       <button class="big" id="gen">✦ Создать эмодзи</button>
-      <div class="result">
+      <div class="card result">
         <h3>📁 Результат</h3>
         <div class="row">
           <div>
@@ -208,26 +235,26 @@
     </div>
 
     <!-- ───── Инструкция ───── -->
-    <div id="view-guide" class="panel hidden" style="grid-column:1">
+    <div id="view-guide" class="panel hidden" style="grid-row:1">
       <h2>Инструкция</h2>
       <div class="scroll doc">
         <h3>1. Укажите имя бота</h3>
-        <p>Введите имя вашего Telegram-бота без @ в поле «Ник бота» и нажмите 💾.</p>
+        <p>В левом нижнем блоке введите имя вашего Telegram-бота без @ и нажмите 💾.</p>
         <h3>2. Получите исходники</h3>
         <ol>
-          <li>Нажмите «Скопировать ID и открыть бота» в нижней части настроек. Все ID уже в буфере обмена.</li>
+          <li>Нажмите «скопировать ID и открыть бота». Все ID уже в буфере обмена.</li>
           <li>В чате с ботом вставьте список и отправьте. Бот пришлёт zip-архив.</li>
-          <li>Перетащите архив в область импорта. Число в скобках показывает, сколько эмодзи готово.</li>
+          <li>Перетащите архив в область импорта. Эмодзи появятся в списке.</li>
         </ol>
         <h3>3. Создайте эмодзи</h3>
-        <p>Выберите цвета и нужные эмодзи, введите ник на вкладке «Создание» и нажмите «Создать эмодзи». Файлы появятся в папке <code>output/</code>, а в предпросмотре — первый результат.</p>
+        <p>Введите ник, выберите цвета и нужные эмодзи, затем нажмите «Создать эмодзи». Файлы появятся в папке <code>output/</code>, а в предпросмотре — первый результат.</p>
         <h3>Важно</h3>
         <p>Для WEBM нужен ffmpeg. Анимированные .tgs лучше проверить в Lottie-просмотрщике перед загрузкой в Telegram.</p>
       </div>
     </div>
 
     <!-- ───── О приложении ───── -->
-    <div id="view-about" class="panel hidden" style="grid-column:1">
+    <div id="view-about" class="panel hidden" style="grid-row:1">
       <h2>О приложении</h2>
       <div class="scroll doc">
         <p><b>Emoji Studio</b> — перекраска кастомных эмодзи Telegram и замена ника на ПК.</p>
@@ -253,6 +280,15 @@ async function api(path, opts = {}) {
   return data;
 }
 
+/* ───── тема ───── */
+function applyTheme(t) {
+  document.documentElement.dataset.theme = t;
+  $("themeLabel").textContent = t === "light" ? "Тёмная тема" : "Светлая тема";
+  localStorage.setItem("es-theme", t);
+}
+$("themeToggle").onclick = () => applyTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light");
+applyTheme(localStorage.getItem("es-theme") || "dark");
+
 /* ───── навигация ───── */
 function showView(name) {
   document.querySelectorAll("nav button").forEach(b => b.classList.toggle("active", b.dataset.view === name));
@@ -266,8 +302,10 @@ document.querySelectorAll("nav button").forEach(b => b.onclick = () => showView(
 /* ───── состояние ───── */
 async function loadState() {
   STATE = await api("/api/state");
-  $("botName").value = STATE.bot_username ? "@" + STATE.bot_username : "";
-  $("readyCount").textContent = `(${STATE.ready_count} доступно)`;
+  $("botName").value = STATE.bot_username || "";
+  $("readyCount").textContent = `(${STATE.ready_count} из ${STATE.total} доступно)`;
+  $("emptyBox").classList.toggle("hidden", STATE.ready_count > 0);
+  $("ver").textContent = STATE.version || "1.0.0";
   renderPalettes();
   renderPicker();
 }
@@ -298,7 +336,6 @@ function renderPalettes() {
   $("gradToggle").classList.toggle("on", SEL.grad);
   $("bodyBRow").classList.toggle("hidden", !SEL.grad);
 }
-
 $("gradToggle").onclick = () => { SEL.grad = !SEL.grad; renderPalettes(); };
 
 function renderPicker() {
@@ -312,13 +349,14 @@ function renderPicker() {
     cb.value = s.id;
     cb.checked = s.ready;
     cb.disabled = !s.ready;
-    cb.onchange = () => { tile.classList.toggle("on", cb.checked); };
+    cb.onchange = () => tile.classList.toggle("on", cb.checked);
     const mark = document.createElement("span");
     mark.className = "mark";
     mark.textContent = "✓";
     const id = document.createElement("div");
     id.className = "id";
     id.textContent = s.id;
+    id.title = s.id;
     const kind = document.createElement("div");
     kind.className = "kind" + (s.ready && !s.calibrated ? " warn" : "");
     kind.textContent = !s.ready ? "нет исходника" : ({ animated: "TGS", video: "WEBM", static: "WEBP" }[s.fmt] + (s.calibrated ? "" : " · проверить"));
@@ -330,7 +368,6 @@ function renderPicker() {
 function selectedIds() {
   return Array.from(document.querySelectorAll("#pickGrid input:checked")).map(c => c.value);
 }
-
 $("selAll").onclick = () => {
   document.querySelectorAll("#pickGrid input:not(:disabled)").forEach(c => { c.checked = true; c.parentElement.classList.add("on"); });
 };
@@ -339,14 +376,14 @@ $("selAll").onclick = () => {
 $("saveBot").onclick = async () => {
   try {
     const r = await api("/api/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ bot_username: $("botName").value }) });
-    $("botName").value = r.bot_username ? "@" + r.bot_username : "";
-    setMsg($("importMsg"), "Имя бота сохранено.", "ok");
-  } catch (e) { setMsg($("importMsg"), e.message, "err"); }
+    $("botName").value = r.bot_username || "";
+    setMsg($("tgMsg"), "Имя бота сохранено.", "ok");
+  } catch (e) { setMsg($("tgMsg"), e.message, "err"); }
 };
 
 async function openTelegram() {
   const name = $("botName").value.trim().replace(/^@/, "");
-  if (!name) { setMsg($("importMsg"), "Сначала укажите имя бота и нажмите 💾.", "err"); return; }
+  if (!name) { setMsg($("tgMsg"), "Сначала укажите имя бота и нажмите 💾.", "err"); return; }
   try { await navigator.clipboard.writeText(STATE.ids_text); } catch (e) {}
   window.open("https://t.me/" + name, "_blank");
   setMsg($("importMsg"), `Скопировано ${STATE.total} ID. Вставьте их в чат с ботом.`, "ok");
@@ -384,7 +421,6 @@ async function handleFiles(files) {
 
 /* ───── генерация ───── */
 function bodySpec() {
-  if (!SEL.bodyA) return "original";
   return SEL.grad ? SEL.bodyA + "|" + SEL.bodyB : SEL.bodyA;
 }
 
@@ -392,16 +428,16 @@ $("gen").onclick = async () => {
   const btn = $("gen");
   $("genFailed").innerHTML = "";
   setMsg($("genMsg"), "");
-  const nick = $("nick").value;
+  const nick = $("nick").value.trim();
   const ids = selectedIds();
-  if (!nick.trim()) { setMsg($("genMsg"), "Введите ник.", "err"); return; }
-  if (!ids.length) { setMsg($("genMsg"), "Выберите хотя бы одно эмодзи.", "err"); return; }
+  if (!nick) { setMsg($("genMsg"), "Введите ник.", "err"); return; }
+  if (!ids.length) { setMsg($("genMsg"), "Выберите хотя бы одно эмодзи. Сначала импортируйте архив от бота.", "err"); return; }
   btn.disabled = true;
   btn.textContent = "Создаём…";
   try {
     const r = await api("/api/generate", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nick: nick.trim(), color: bodySpec(), nick_color: SEL.nick, ids }),
+      body: JSON.stringify({ nick, color: bodySpec(), nick_color: SEL.nick, ids }),
     });
     const real = r.failed.filter(f => !f.error.startsWith("сохранено, но"));
     const warn = r.failed.filter(f => f.error.startsWith("сохранено, но"));
@@ -412,9 +448,10 @@ $("gen").onclick = async () => {
     $("genFailed").innerHTML = warn.concat(real).map(f => `<div>${f.id}: ${f.error.replace(/</g, "&lt;")}</div>`).join("");
     const firstWebp = r.ok.find(n => n.endsWith(".webp"));
     if (firstWebp) {
-      const src = `/api/preview?dir=${encodeURIComponent(r.out_dir_name)}&file=${encodeURIComponent(firstWebp)}`;
-      $("pvImg").src = src; $("thumb").src = src;
-      $("pvImg").classList.remove("hidden"); $("thumb").classList.remove("hidden");
+      $("pvImg").src = `/api/preview?dir=${encodeURIComponent(r.out_dir_name)}&file=${encodeURIComponent(firstWebp)}`;
+      $("thumb").src = $("pvImg").src;
+      $("pvImg").classList.remove("hidden");
+      $("thumb").classList.remove("hidden");
       $("pvDefault").classList.add("hidden");
     }
     $("pvBadge").textContent = "Готово к экспорту";

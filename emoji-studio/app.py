@@ -66,6 +66,7 @@ def state() -> dict:
         "bot_username": settings.get("bot_username", ""),
         "ffmpeg": shutil.which(config.FFMPEG) is not None,
         "output_dir": str(config.OUTPUT_DIR),
+        "version": config.APP_VERSION,
     }
 
 
