@@ -1,0 +1,62 @@
+--- bot_orig/handlers/admin.py	2026-11-06 12:09:20.000000000 +0500
++++ bot_src/handlers/admin.py	2026-11-25 18:16:32.004652802 +0500
+@@ -2,11 +2,12 @@
+ 
+ import html
+ import logging
++import re
+ import zipfile
+ 
+ from aiogram import Bot, F, Router
+ from aiogram.exceptions import TelegramForbiddenError, TelegramBadRequest
+-from aiogram.filters import Command
++from aiogram.filters import Command, CommandObject
+ from aiogram.fsm.context import FSMContext
+ from aiogram.fsm.state import State, StatesGroup
+ from aiogram.types import CallbackQuery, FSInputFile, Message
+@@ -149,6 +150,45 @@
+     await message.answer_document(FSInputFile(archive), caption="Исходные эмодзи пака")
+ 
+ 
++ID_LIST_RE = re.compile(r"^\s*(\d{15,20}\s*)+$")
++
++
++async def _send_sources_by_ids(message: Message, bot: Bot, raw: str) -> None:
++    """Отдаёт zip с исходными .tgs/.webp/.webm для любых custom emoji ID из текста (для приложения на ПК)."""
++    ids = list(dict.fromkeys(re.findall(r"\d{15,20}", raw)))[:200]
++    if not ids:
++        await message.answer("Пришлите ID эмодзи (15–20 цифр), по одному на строку.")
++        return
++    meta = await _ensure_sources(bot, ids)
++    archive = config.TMP_DIR / "sources_custom.zip"
++    with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as z:
++        for eid in ids:
++            info = meta.get(eid)
++            if info:
++                z.write(config.CACHE_DIR / info["file"], arcname=info["file"])
++    missing = [i for i in ids if i not in meta]
++    caption = f"Исходные эмодзи: {len(ids) - len(missing)} из {len(ids)}"
++    if missing:
++        caption += "\nНе найдены: " + ", ".join(missing)
++    await message.answer_document(FSInputFile(archive), caption=caption[:1024])
++
++
++@router.message(Command("getids"))
++async def getids(message: Message, bot: Bot, command: CommandObject) -> None:
++    """/getids <ID> <ID> … — исходники для Emoji Studio (только администраторы)."""
++    if message.from_user is None or message.from_user.id not in config.ADMIN_IDS:
++        return
++    await _send_sources_by_ids(message, bot, command.args or "")
++
++
++@router.message(F.text.regexp(ID_LIST_RE))
++async def getids_plain(message: Message, bot: Bot) -> None:
++    """Сообщение только из ID (например, вставленные из приложения) — тоже отдаём исходники."""
++    if message.from_user is None or message.from_user.id not in config.ADMIN_IDS:
++        return
++    await _send_sources_by_ids(message, bot, message.text or "")
++
++
+ @router.message(Command("nickmap"))
+ async def nickmap(message: Message, bot: Bot) -> None:
+     """Выгружает позиции кандидатов в ник для каждого исходного эмодзи (текстовый файл)."""
