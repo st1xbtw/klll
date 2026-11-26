@@ -26,6 +26,7 @@ from emoji_studio import config, generator, sources, telegram_fetch  # noqa: E40
 
 WEB_INDEX = config.BUNDLE_DIR / "web" / "index.html"
 ASSETS_DIR = config.BUNDLE_DIR / "web" / "assets"
+ASSET_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".js": "application/javascript"}
 MAX_UPLOAD = 200 * 1024 * 1024
 MAX_JSON = 1024 * 1024
 USERNAME_RE = re.compile(r"^[A-Za-z0-9_]{5,32}$")
@@ -102,11 +103,16 @@ class Handler(BaseHTTPRequestHandler):
     def _send_file(self, f: Path, ctype: str) -> None:
         body = f.read_bytes()
         self.send_response(200)
+        if f.suffix.lower() == ".tgs":
+            ctype = "application/json"
+            self.send_header("Content-Encoding", "gzip")
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(body)
+
+    CTYPES = {".webp": "image/webp", ".webm": "video/webm", ".tgs": "application/json"}
 
     def _body(self, limit: int) -> bytes:
         length = int(self.headers.get("Content-Length") or 0)
@@ -136,19 +142,28 @@ class Handler(BaseHTTPRequestHandler):
         elif path.startswith("/assets/"):
             name = Path(path[len("/assets/"):]).name
             f = ASSETS_DIR / name
-            if name != path[len("/assets/"):] or not f.is_file() or f.suffix.lower() not in (".png", ".jpg"):
+            ctype = ASSET_TYPES.get(f.suffix.lower())
+            if name != path[len("/assets/"):] or not f.is_file() or ctype is None:
                 self._json(404, {"error": "not found"})
                 return
-            self._send_file(f, "image/png" if f.suffix == ".png" else "image/jpeg")
+            self._send_file(f, ctype)
         elif path == "/api/preview":
             q = parse_qs(urlparse(self.path).query)
             d = Path(q.get("dir", [""])[0]).name
             fn = Path(q.get("file", [""])[0]).name
             f = config.OUTPUT_DIR / d / fn
-            if not (d and fn and f.suffix.lower() == ".webp" and f.is_file()):
+            if not (d and fn and f.suffix.lower() in self.CTYPES and f.is_file()):
                 self._json(404, {"error": "not found"})
                 return
-            self._send_file(f, "image/webp")
+            self._send_file(f, self.CTYPES[f.suffix.lower()])
+        elif path == "/api/source":
+            q = parse_qs(urlparse(self.path).query)
+            eid = q.get("id", [""])[0]
+            info = sources.scan().get(eid) if re.fullmatch(r"\d{15,20}", eid) else None
+            if info is None:
+                self._json(404, {"error": "not found"})
+                return
+            self._send_file(info["path"], self.CTYPES[info["path"].suffix.lower()])
         else:
             self._json(404, {"error": "not found"})
 

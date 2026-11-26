@@ -46,7 +46,9 @@
 
   .side-block { margin-top: auto; border: 1px solid var(--line); background: var(--field); border-radius: 16px; padding: 12px; }
   .side-block label { display: block; color: var(--muted); font-size: 12px; margin-bottom: 6px; }
-  .side-block .row { display: flex; gap: 6px; }
+  .side-block .row { display: flex; gap: 6px; align-items: center; }
+  .side-block .row input { flex: 1; min-width: 0; padding: 9px 10px; }
+  .side-block .row button { flex: none; }
   .side-block .msg { font-size: 12px; margin-top: 6px; color: var(--muted); }
   .theme { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 14px; border: 1px solid var(--line); cursor: pointer; user-select: none; color: var(--muted); background: var(--field); }
   .switch { width: 42px; height: 24px; border-radius: 14px; background: #3a3350; position: relative; transition: .2s; }
@@ -62,7 +64,7 @@
   .scroll { overflow: auto; min-height: 0; flex: 1; padding-right: 6px; }
   .field-row { display: grid; grid-template-columns: 120px 1fr; align-items: center; gap: 12px; margin: 10px 0; }
   .lbl { color: var(--muted); }
-  input[type=text] { width: 100%; background: var(--field); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 11px 14px; font: inherit; outline: none; }
+  input[type=text], input[type=password] { width: 100%; min-width: 0; background: var(--field); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 11px 14px; font: inherit; outline: none; }
   input[type=text]:focus { border-color: var(--accent); }
   .swatches { display: flex; gap: 8px; flex-wrap: wrap; }
   .sw { width: 30px; height: 30px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; box-shadow: inset 0 0 0 1px rgba(128,128,128,.25); }
@@ -92,6 +94,12 @@
   .tile .mark { position: absolute; top: 7px; right: 7px; width: 18px; height: 18px; border-radius: 6px; border: 1px solid var(--line); color: transparent; font-size: 12px; line-height: 16px; }
   .tile.on .mark { background: var(--accent); border-color: var(--accent); color: #fff; }
   .tile.off { opacity: .45; cursor: default; }
+  .pvbox { height: 92px; display: flex; align-items: center; justify-content: center; margin-bottom: 6px; border-radius: 10px; background: repeating-conic-gradient(rgba(128,128,128,.12) 0 25%, transparent 0 50%) 0 0/12px 12px; overflow: hidden; }
+  .pvbox img, .pvbox video { max-width: 100%; max-height: 100%; }
+  .pvbox .lottie { width: 92px; height: 92px; }
+  .pvbox .ph { font-size: 22px; color: var(--muted); }
+  .note { margin: 0 0 10px; font-size: 12.5px; color: var(--muted); }
+  .note b { color: var(--warn); }
   .tile .id { color: var(--text); font-size: 11.5px; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tile .kind { font-size: 11px; color: var(--accent-2); margin-top: 4px; }
   .tile .kind.warn { color: var(--warn); }
@@ -102,6 +110,9 @@
   .pv-head { display: flex; align-items: center; gap: 8px; }
   .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
   .preview { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; border-radius: 18px; background-color: transparent; background-image: linear-gradient(45deg, var(--checker) 25%, transparent 25%), linear-gradient(-45deg, var(--checker) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, var(--checker) 75%), linear-gradient(-45deg, transparent 75%, var(--checker) 75%); background-size: 24px 24px; background-position: 0 0, 0 12px, 12px -12px, -12px 0; margin-top: 12px; padding: 16px; }
+  #pvAnim, #pvVid { width: 62%; max-height: 66%; }
+  #pvVid { object-fit: contain; }
+  #pvAnim { aspect-ratio: 1; }
   .pv-img { width: 62%; max-height: 66%; object-fit: contain; filter: drop-shadow(0 0 26px rgba(139,92,246,.45)); }
   .badge { font-size: 13px; padding: 6px 14px; border-radius: 999px; background: rgba(74,222,128,.14); color: var(--ok); border: 1px solid rgba(74,222,128,.35); }
   .badge.off { background: var(--field); color: var(--muted); border-color: var(--line); }
@@ -188,6 +199,7 @@
             <button class="link" id="selAll">Выбрать все</button>
           </div>
 
+          <p class="note" id="calNote"></p>
           <div class="drop" id="drop">
             <div class="ico">⤓</div>
             <div>Перетащите архив с исходниками (или zip от бота)
@@ -209,6 +221,8 @@
         <div class="preview">
           <img class="pv-img" id="pvDefault" src="/assets/mascot_preview.png" alt="">
           <img class="pv-img hidden" id="pvImg" alt="">
+          <video class="hidden" id="pvVid" autoplay loop muted playsinline></video>
+          <div class="hidden" id="pvAnim"></div>
           <span class="badge off" id="pvBadge">Ещё не создано</span>
         </div>
       </div>
@@ -265,6 +279,7 @@
   </main>
 </div>
 
+<script src="/assets/lottie.min.js"></script>
 <script>
 const HDR = { "X-Emoji-Studio": "1" };
 let STATE = null;
@@ -338,17 +353,59 @@ function renderPalettes() {
 }
 $("gradToggle").onclick = () => { SEL.grad = !SEL.grad; renderPalettes(); };
 
+/* ленивое превью: анимация запускается, когда плитка попала в экран */
+const lazyObs = ("IntersectionObserver" in window) ? new IntersectionObserver((entries) => {
+  entries.forEach(en => {
+    if (!en.isIntersecting) return;
+    const box = en.target;
+    lazyObs.unobserve(box);
+    if (box.dataset.kind === "animated" && window.lottie) {
+      lottie.loadAnimation({ container: box, renderer: "svg", loop: true, autoplay: true, path: box.dataset.src });
+    }
+  });
+}, { rootMargin: "120px" }) : null;
+
+function makePreview(s) {
+  const box = document.createElement("div");
+  box.className = "pvbox";
+  if (!s.ready) { box.innerHTML = '<span class="ph">—</span>'; return box; }
+  const src = "/api/source?id=" + encodeURIComponent(s.id);
+  if (s.fmt === "animated") {
+    const inner = document.createElement("div");
+    inner.className = "lottie";
+    inner.dataset.kind = "animated";
+    inner.dataset.src = src;
+    box.appendChild(inner);
+    if (lazyObs) lazyObs.observe(inner); else lottie.loadAnimation({ container: inner, renderer: "svg", loop: true, autoplay: true, path: src });
+  } else if (s.fmt === "video") {
+    const v = document.createElement("video");
+    v.src = src; v.autoplay = true; v.loop = true; v.muted = true; v.playsInline = true;
+    box.appendChild(v);
+  } else {
+    const img = document.createElement("img");
+    img.src = src; img.alt = "";
+    box.appendChild(img);
+  }
+  return box;
+}
+
 function renderPicker() {
   const grid = $("pickGrid");
   grid.innerHTML = "";
+  const cal = STATE.sources.filter(s => s.ready && s.calibrated).length;
+  const uncal = STATE.sources.filter(s => s.ready && !s.calibrated).length;
+  $("calNote").innerHTML = uncal
+    ? `<b>${cal}</b> откалиброваны и выбраны по умолчанию. <b>${uncal}</b> без калибровки: в них остаётся старый текст на рисунке, поэтому выбирайте их вручную.`
+    : (cal ? `Все ${cal} эмодзи откалиброваны.` : "");
   STATE.sources.forEach(s => {
     const tile = document.createElement("label");
     tile.className = "tile" + (s.ready ? " on" : " off");
     const cb = document.createElement("input");
     cb.type = "checkbox";
     cb.value = s.id;
-    cb.checked = s.ready;
     cb.disabled = !s.ready;
+    cb.checked = s.ready && s.calibrated;
+    tile.classList.toggle("on", cb.checked);
     cb.onchange = () => tile.classList.toggle("on", cb.checked);
     const mark = document.createElement("span");
     mark.className = "mark";
@@ -359,8 +416,8 @@ function renderPicker() {
     id.title = s.id;
     const kind = document.createElement("div");
     kind.className = "kind" + (s.ready && !s.calibrated ? " warn" : "");
-    kind.textContent = !s.ready ? "нет исходника" : ({ animated: "TGS", video: "WEBM", static: "WEBP" }[s.fmt] + (s.calibrated ? "" : " · проверить"));
-    tile.append(cb, mark, id, kind);
+    kind.textContent = !s.ready ? "нет исходника" : ({ animated: "TGS", video: "WEBM", static: "WEBP" }[s.fmt] + (s.calibrated ? "" : " · без калибровки"));
+    tile.append(cb, makePreview(s), mark, id, kind);
     grid.appendChild(tile);
   });
 }
@@ -460,14 +517,8 @@ $("gen").onclick = async () => {
     $("openOut").dataset.dir = r.out_dir_name;
     $("openOut").classList.remove("hidden");
     $("genFailed").innerHTML = warn.concat(real).map(f => `<div>${f.id}: ${f.error.replace(/</g, "&lt;")}</div>`).join("");
-    const firstWebp = r.ok.find(n => n.endsWith(".webp"));
-    if (firstWebp) {
-      $("pvImg").src = `/api/preview?dir=${encodeURIComponent(r.out_dir_name)}&file=${encodeURIComponent(firstWebp)}`;
-      $("thumb").src = $("pvImg").src;
-      $("pvImg").classList.remove("hidden");
-      $("thumb").classList.remove("hidden");
-      $("pvDefault").classList.add("hidden");
-    }
+    const first = r.ok.find(n => n.endsWith(".webp")) || r.ok[0];
+    if (first) showResult(r.out_dir_name, first);
     $("pvBadge").textContent = "Готово к экспорту";
     $("pvBadge").className = "badge";
   } catch (e) {
@@ -477,6 +528,20 @@ $("gen").onclick = async () => {
     btn.textContent = "✦ Создать эмодзи";
   }
 };
+
+function showResult(dir, file) {
+  const url = `/api/preview?dir=${encodeURIComponent(dir)}&file=${encodeURIComponent(file)}`;
+  ["pvImg", "pvVid", "pvAnim", "pvDefault"].forEach(id => $(id).classList.add("hidden"));
+  $("pvAnim").innerHTML = "";
+  const ext = file.split(".").pop().toLowerCase();
+  if (ext === "webp") { $("pvImg").src = url; $("pvImg").classList.remove("hidden"); $("thumb").src = url; }
+  else if (ext === "webm") { $("pvVid").src = url; $("pvVid").classList.remove("hidden"); }
+  else if (ext === "tgs" && window.lottie) {
+    $("pvAnim").classList.remove("hidden");
+    lottie.loadAnimation({ container: $("pvAnim"), renderer: "svg", loop: true, autoplay: true, path: url });
+  }
+  $("thumb").classList.toggle("hidden", ext !== "webp");
+}
 
 $("openOut").onclick = () => api("/api/open-output", {
   method: "POST", headers: { "Content-Type": "application/json" },
