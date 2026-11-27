@@ -168,7 +168,7 @@ button { cursor: pointer; }
   padding: 6px 4px 5px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0;
 }
 .tile input { position: absolute; opacity: 0; pointer-events: none; }
-.tile.on { border-color: rgba(190, 220, 255, .85); box-shadow: 0 0 18px rgba(80, 150, 255, .5); }
+.tile.on { border-color: rgba(190, 220, 255, .85); }
 .tile .pvbox { width: 64px; height: 64px; display: grid; place-items: center; }
 .tile .pvbox img, .tile .pvbox video, .tile .pvbox .lottie { width: 64px; height: 64px; object-fit: contain; display: grid; place-items: center; }
 .tile .pvbox .ph { color: var(--muted); }
@@ -581,12 +581,18 @@ $("nickClear").onclick = () => { $("nick").value = ""; updateNick(); $("nick").f
 /* Анимация плитки создаётся только пока курсор на ней и сразу удаляется при уходе.
    Одновременно существует не больше одной анимации — поэтому интерфейс не тормозит. */
 let hoverAnim = null;
+/* Статичный кадр плитки: снимается один раз (в фоне, по 2 за раз) и хранится как SVG-картинка. */
+const SNAP_Q = [];
+let snapRunning = 0;
+function showTileIdle(box) {
+  box.innerHTML = box._snap ? `<img src="${box._snap}" alt="">` : '<span class="play">▶</span>';
+}
 function stopHover() {
   if (!hoverAnim) return;
   const { box, anim } = hoverAnim;
   hoverAnim = null;
   try { anim.destroy(); } catch (e) { /* уже удалён */ }
-  box.innerHTML = '<span class="play">▶</span>';
+  showTileIdle(box);
 }
 function startHover(box) {
   if (!window.lottie) return;
@@ -596,7 +602,52 @@ function startHover(box) {
   const anim = lottie.loadAnimation({ container: box, renderer: "svg", loop: true, autoplay: true, path: box.dataset.src });
   hoverAnim = { box, anim };
 }
-function destroyAnims() { stopHover(); }
+function takeSnap(box) {
+  return new Promise((resolve) => {
+    if (!window.lottie) return resolve();
+    const host = document.createElement("div");
+    host.style.cssText = "position:fixed;left:-9999px;top:0;width:128px;height:128px";
+    document.body.appendChild(host);
+    const a = lottie.loadAnimation({ container: host, renderer: "svg", loop: false, autoplay: false, path: box.dataset.src });
+    let finished = false;
+    const finish = () => {
+      if (finished) return; finished = true;
+      try { a.destroy(); } catch (e) { /* уже удалён */ }
+      host.remove();
+      resolve();
+    };
+    a.addEventListener("DOMLoaded", () => {
+      try {
+        a.goToAndStop(Math.floor(a.totalFrames * 0.35), true);
+        const svg = host.querySelector("svg");
+        if (svg) {
+          svg.setAttribute("width", "128"); svg.setAttribute("height", "128");
+          box._snap = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(new XMLSerializer().serializeToString(svg));
+          if (box.isConnected && !(hoverAnim && hoverAnim.box === box)) showTileIdle(box);
+        }
+      } catch (e) { /* пропускаем плитку */ }
+      finish();
+    });
+    setTimeout(finish, 6000);
+  });
+}
+function pumpSnaps() {
+  while (snapRunning < 2 && SNAP_Q.length) {
+    const box = SNAP_Q.shift();
+    if (!box.isConnected || box._snap) continue;
+    snapRunning++;
+    takeSnap(box).finally(() => { snapRunning--; pumpSnaps(); });
+  }
+}
+const lazyObs = ("IntersectionObserver" in window) ? new IntersectionObserver((entries) => {
+  entries.forEach((en) => {
+    if (!en.isIntersecting) return;
+    lazyObs.unobserve(en.target);
+    SNAP_Q.push(en.target);
+  });
+  pumpSnaps();
+}, { rootMargin: "200px" }) : null;
+function destroyAnims() { stopHover(); SNAP_Q.length = 0; if (lazyObs) lazyObs.disconnect(); }
 
 function makePreview(s) {
   const box = document.createElement("div");
@@ -608,10 +659,11 @@ function makePreview(s) {
     inner.className = "lottie";
     inner.dataset.kind = "animated";
     inner.dataset.src = src;
-    inner.innerHTML = '<span class="play">▶</span>';
+    showTileIdle(inner);
     box.appendChild(inner);
     box.addEventListener("mouseenter", () => startHover(inner));
     box.addEventListener("mouseleave", () => stopHover());
+    if (lazyObs) lazyObs.observe(inner); else { SNAP_Q.push(inner); pumpSnaps(); }
   } else if (s.fmt === "video") {
     const v = document.createElement("video");
     v.src = src; v.autoplay = true; v.loop = true; v.muted = true; v.playsInline = true;
