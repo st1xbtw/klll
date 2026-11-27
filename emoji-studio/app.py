@@ -239,6 +239,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not common.supports_cyrillic(dest):
                     dest.unlink(missing_ok=True)
                     raise ValueError("В шрифте нет кириллицы и латиницы")
+                common.invalidate_fonts()
                 settings = load_settings()
                 settings["font_path"] = str(dest)
                 save_settings(settings)

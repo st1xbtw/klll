@@ -579,13 +579,25 @@ $("nick").oninput = updateNick;
 $("nickClear").onclick = () => { $("nick").value = ""; updateNick(); $("nick").focus(); };
 
 /* ───── превью исходников ───── */
+/* Все Lottie-экземпляры учитываем, чтобы останавливать и удалять их при перерисовке. */
+const ANIMS = [];
+function destroyAnims() {
+  if (lazyObs) lazyObs.disconnect();
+  while (ANIMS.length) { try { ANIMS.pop().destroy(); } catch (e) { /* уже удалён */ } }
+}
+/* Анимация играет только пока превью видно на экране; вне экрана — пауза. */
 const lazyObs = ("IntersectionObserver" in window) ? new IntersectionObserver((entries) => {
   entries.forEach((en) => {
-    if (!en.isIntersecting) return;
     const box = en.target;
-    lazyObs.unobserve(box);
-    if (box.dataset.kind === "animated" && window.lottie) {
-      lottie.loadAnimation({ container: box, renderer: "svg", loop: true, autoplay: true, path: box.dataset.src });
+    if (en.isIntersecting) {
+      if (!box._anim && window.lottie) {
+        box._anim = lottie.loadAnimation({ container: box, renderer: "svg", loop: true, autoplay: true, path: box.dataset.src });
+        ANIMS.push(box._anim);
+      } else if (box._anim) {
+        box._anim.play();
+      }
+    } else if (box._anim) {
+      box._anim.pause();
     }
   });
 }, { rootMargin: "120px" }) : null;
@@ -601,7 +613,8 @@ function makePreview(s) {
     inner.dataset.kind = "animated";
     inner.dataset.src = src;
     box.appendChild(inner);
-    if (lazyObs) lazyObs.observe(inner); else lottie.loadAnimation({ container: inner, renderer: "svg", loop: true, autoplay: true, path: src });
+    if (lazyObs) lazyObs.observe(inner);
+    else if (window.lottie) { inner._anim = lottie.loadAnimation({ container: inner, renderer: "svg", loop: true, autoplay: true, path: src }); ANIMS.push(inner._anim); }
   } else if (s.fmt === "video") {
     const v = document.createElement("video");
     v.src = src; v.autoplay = true; v.loop = true; v.muted = true; v.playsInline = true;
@@ -616,6 +629,7 @@ function makePreview(s) {
 
 function renderPicker() {
   const grid = $("pickGrid");
+  destroyAnims();
   grid.innerHTML = "";
   const cal = STATE.sources.filter((s) => s.ready && s.calibrated).length;
   const uncal = STATE.sources.filter((s) => s.ready && !s.calibrated).length;
@@ -823,7 +837,8 @@ function showResult(dir, fileName) {
   else if (ext === "webm") { $("pvVid").src = url; $("pvVid").classList.remove("hidden"); }
   else if (ext === "tgs" && window.lottie) {
     $("pvAnim").classList.remove("hidden");
-    lottie.loadAnimation({ container: $("pvAnim"), renderer: "svg", loop: true, autoplay: true, path: url });
+    if (window._pvAnim) { try { window._pvAnim.destroy(); } catch (e) { /* уже удалён */ } }
+    window._pvAnim = lottie.loadAnimation({ container: $("pvAnim"), renderer: "svg", loop: true, autoplay: true, path: url });
   }
 }
 

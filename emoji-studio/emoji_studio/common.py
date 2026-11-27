@@ -59,11 +59,24 @@ _SYSTEM_FONTS = [
 ]
 
 
+_SETTINGS_CACHE: tuple[float, dict] | None = None
+
+
 def _settings() -> dict:
+    """Настройки читаются с диска только когда файл изменился (по mtime)."""
+    global _SETTINGS_CACHE
     try:
-        return json.loads(config.SETTINGS_FILE.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+        mtime = config.SETTINGS_FILE.stat().st_mtime
+    except OSError:
         return {}
+    if _SETTINGS_CACHE is not None and _SETTINGS_CACHE[0] == mtime:
+        return _SETTINGS_CACHE[1]
+    try:
+        data = json.loads(config.SETTINGS_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        data = {}
+    _SETTINGS_CACHE = (mtime, data)
+    return data
 
 
 def font_scale() -> float:
@@ -122,8 +135,24 @@ def _font_dirs() -> list[Path]:
     return [d for d in dirs if d.is_dir()]
 
 
+_FONTS_CACHE: list[dict] | None = None
+
+
+def invalidate_fonts() -> None:
+    """Сбрасывает кэш списка шрифтов (после добавления нового файла)."""
+    global _FONTS_CACHE
+    _FONTS_CACHE = None
+
+
 def list_fonts() -> list[dict]:
-    """Установленные в системе и добавленные вручную шрифты с кириллицей."""
+    """Установленные в системе и добавленные вручную шрифты с кириллицей.
+
+    Сканирование системных папок тяжёлое, поэтому результат кэшируется до
+    загрузки нового шрифта (см. invalidate_fonts).
+    """
+    global _FONTS_CACHE
+    if _FONTS_CACHE is not None:
+        return _FONTS_CACHE
     found: dict[str, dict] = {}
     for d in _font_dirs():
         for p in d.rglob("*"):
@@ -133,7 +162,8 @@ def list_fonts() -> list[dict]:
             if name in found or not supports_cyrillic(p):
                 continue
             found[name] = {"name": name, "path": str(p)}
-    return sorted(found.values(), key=lambda f: f["name"].lower())
+    _FONTS_CACHE = sorted(found.values(), key=lambda f: f["name"].lower())
+    return _FONTS_CACHE
 
 
 @lru_cache(maxsize=4)
