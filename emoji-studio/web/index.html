@@ -39,7 +39,7 @@ button { cursor: pointer; }
 .hidden { display: none !important; }
 .glass {
   background: var(--glass); border: 1px solid var(--line); border-radius: 26px;
-  backdrop-filter: blur(18px) saturate(140%); -webkit-backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: blur(10px) saturate(130%); -webkit-backdrop-filter: blur(10px) saturate(130%);
   box-shadow: var(--shadow);
 }
 
@@ -52,7 +52,7 @@ button { cursor: pointer; }
 /* шапка */
 .brand { grid-column: 1; grid-row: 1; display: flex; align-items: center; gap: 14px; padding: 0 18px; }
 .brand img { width: 64px; height: auto; object-fit: contain; flex: none; }
-.brand b { font-size: 22px; font-weight: 700; display: block; letter-spacing: .2px; }
+.brand b { font-size: 20px; font-weight: 700; display: block; letter-spacing: .2px; white-space: nowrap; }
 .brand small { color: var(--muted); font-size: 13px; }
 .topbar { grid-column: 2 / 4; grid-row: 1; display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding: 0 16px; }
 .themepill, .winbar { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; background: var(--glass2); border: 1px solid var(--line); padding: 5px; }
@@ -86,7 +86,8 @@ button { cursor: pointer; }
 
 /* центр */
 .main { grid-column: 2; grid-row: 2; position: relative; min-height: 0; display: flex; flex-direction: column; }
-.mascot-peek { position: absolute; top: -110px; left: 50%; transform: translateX(-50%); width: 230px; pointer-events: none; z-index: 3; filter: drop-shadow(0 10px 18px rgba(0, 20, 90, .35)); }
+/* кот держится лапами за верхний край панели: целиком виден, лапы лежат на рамке */
+.mascot-peek { position: absolute; top: -70px; left: 50%; transform: translateX(-50%); width: 150px; pointer-events: none; z-index: 3; filter: drop-shadow(0 8px 14px rgba(0, 20, 90, .35)); }
 .panel { padding: 26px 28px 22px; overflow: auto; min-height: 0; flex: 1; }
 .panel h2 { margin: 4px 0 16px; font-size: 24px; }
 .step { display: flex; align-items: center; gap: 12px; margin: 22px 0 12px; font-weight: 700; font-size: 18px; }
@@ -219,7 +220,7 @@ button { cursor: pointer; }
 }
 .stage img, .stage video, .stage .lottie { position: relative; max-width: 86%; max-height: 86%; object-fit: contain; filter: drop-shadow(0 16px 24px rgba(0, 12, 70, .5)); }
 .stage .lottie { width: 280px; height: 280px; }
-.stage #pvDefault { animation: float 4s ease-in-out infinite; }
+.stage #pvDefault { animation: float 4s ease-in-out infinite; max-width: 70%; filter: drop-shadow(0 10px 18px rgba(0, 12, 70, .35)); opacity: .92; }
 @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
 .stage .caption {
   position: absolute; left: 12px; right: 12px; bottom: 12px; text-align: center; font-size: 13px; color: var(--text);
@@ -264,7 +265,7 @@ button { cursor: pointer; }
   <!-- шапка -->
   <div class="glass brand">
     <img src="/assets/lunary_logo.png" alt="">
-    <div><b>Lunary Emoji</b><small>Создавай свои эмодзи ♡</small></div>
+    <div><b>Lunary Emoji</b></div>
   </div>
   <div class="topbar">
     <div class="themepill">
@@ -427,7 +428,7 @@ button { cursor: pointer; }
     <div class="glass preview">
       <div class="head">Предпросмотр <span class="sp"></span><span class="tag" id="pvTag">готово к созданию</span></div>
       <div class="stage" id="stage">
-        <img id="pvDefault" src="/assets/lunary_peek.png" alt="">
+        <img id="pvDefault" src="/assets/preview_cat.png" alt="">
         <img id="pvImg" class="hidden" alt="">
         <video id="pvVid" class="hidden" autoplay loop muted playsinline></video>
         <div id="pvAnim" class="lottie hidden"></div>
@@ -583,22 +584,33 @@ $("nickClear").onclick = () => { $("nick").value = ""; updateNick(); $("nick").f
 const ANIMS = [];
 function destroyAnims() {
   if (lazyObs) lazyObs.disconnect();
+  TILE_Q.length = 0;
   while (ANIMS.length) { try { ANIMS.pop().destroy(); } catch (e) { /* уже удалён */ } }
 }
-/* Анимация играет только пока превью видно на экране; вне экрана — пауза. */
+/* В сетке все эмодзи показаны статичным кадром (без постоянной анимации — это и было причиной тормозов).
+   Анимация запускается только при наведении на плитку. */
+function makeTileAnim(box) {
+  if (!window.lottie || box._anim) return;
+  const a = lottie.loadAnimation({ container: box, renderer: "svg", loop: true, autoplay: false, path: box.dataset.src });
+  box._anim = a;
+  ANIMS.push(a);
+  a.addEventListener("DOMLoaded", () => a.goToAndStop(Math.floor(a.totalFrames * 0.35), true));
+}
+/* Создание SVG-анимаций тяжёлое: делаем их порциями по ~12 мс, чтобы интерфейс не замирал при прокрутке. */
+const TILE_Q = [];
+let tileQBusy = false;
+function pumpTiles() {
+  const t0 = performance.now();
+  while (TILE_Q.length && performance.now() - t0 < 12) makeTileAnim(TILE_Q.shift());
+  if (TILE_Q.length) setTimeout(pumpTiles, 0); else tileQBusy = false;
+}
+function queueTile(el) {
+  TILE_Q.push(el);
+  if (!tileQBusy) { tileQBusy = true; setTimeout(pumpTiles, 0); }
+}
 const lazyObs = ("IntersectionObserver" in window) ? new IntersectionObserver((entries) => {
   entries.forEach((en) => {
-    const box = en.target;
-    if (en.isIntersecting) {
-      if (!box._anim && window.lottie) {
-        box._anim = lottie.loadAnimation({ container: box, renderer: "svg", loop: true, autoplay: true, path: box.dataset.src });
-        ANIMS.push(box._anim);
-      } else if (box._anim) {
-        box._anim.play();
-      }
-    } else if (box._anim) {
-      box._anim.pause();
-    }
+    if (en.isIntersecting) { lazyObs.unobserve(en.target); queueTile(en.target); }
   });
 }, { rootMargin: "120px" }) : null;
 
@@ -613,8 +625,11 @@ function makePreview(s) {
     inner.dataset.kind = "animated";
     inner.dataset.src = src;
     box.appendChild(inner);
-    if (lazyObs) lazyObs.observe(inner);
-    else if (window.lottie) { inner._anim = lottie.loadAnimation({ container: inner, renderer: "svg", loop: true, autoplay: true, path: src }); ANIMS.push(inner._anim); }
+    box.addEventListener("mouseenter", () => { if (inner._anim) inner._anim.play(); });
+    box.addEventListener("mouseleave", () => {
+      if (inner._anim) { inner._anim.pause(); inner._anim.goToAndStop(Math.floor(inner._anim.totalFrames * 0.35), true); }
+    });
+    if (lazyObs) lazyObs.observe(inner); else makeTileAnim(inner);
   } else if (s.fmt === "video") {
     const v = document.createElement("video");
     v.src = src; v.autoplay = true; v.loop = true; v.muted = true; v.playsInline = true;
