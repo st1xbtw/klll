@@ -16,6 +16,7 @@ from fontTools.pens.basePen import BasePen
 from fontTools.ttLib import TTFont
 
 from . import config
+from .common import nick_region_frac
 from .common import Tint, find_font, font_scale, make_tint, parse_hex, shade
 
 log = logging.getLogger(__name__)
@@ -643,7 +644,7 @@ def iter_shape_layers(data: dict):
 _IDENT = (1.0, 1.0, 0.0, 0.0)
 
 
-def _letter_bands(shapes: list, aff: tuple, w: float, h: float) -> list:
+def _letter_bands(shapes: list, aff: tuple, w: float, h: float, row_free: bool = False) -> list:
     """Пятибуквенные полосы: группы N, у которых ровно 5 дочерних групп-букв в одной строке.
 
     Возвращает список (N, kids, global_bbox, inner_bbox). Внутренний bbox — в системе координат N
@@ -677,8 +678,10 @@ def _letter_bands(shapes: list, aff: tuple, w: float, h: float) -> list:
                 for k in kids[1:]:
                     ref = band[0][2]
                     ib = k[2]
-                    if abs(ib[1] - ref[1]) < tol_y and abs(ib[3] - ref[3]) < tol_y and (ib[3] - ib[1]) <= max_h:
+                    if row_free or (abs(ib[1] - ref[1]) < tol_y and abs(ib[3] - ref[3]) < tol_y and (ib[3] - ib[1]) <= max_h):
                         band.append(k)
+                if row_free:
+                    band = kids if len(kids) == 5 else band
                 if len(band) == 5:
                     gU = (min(b[1][0] for b in band), min(b[1][1] for b in band),
                           max(b[1][2] for b in band), max(b[1][3] for b in band))
@@ -691,11 +694,11 @@ def _letter_bands(shapes: list, aff: tuple, w: float, h: float) -> list:
     return out
 
 
-def letter_band_layers(data: dict) -> list:
+def letter_band_layers(data: dict, row_free: bool = False) -> list:
     """Слои-фигуры в фиксированном порядке (тот же, что у iter_shape_layers) и их полосы."""
     w = float(data.get("w", 512))
     h = float(data.get("h", 512))
-    return [(li, layer, _letter_bands(layer.get("shapes", []), aff, w, h))
+    return [(li, layer, _letter_bands(layer.get("shapes", []), aff, w, h, row_free))
             for li, (layer, aff) in enumerate(iter_shape_layers(data))]
 
 
@@ -714,9 +717,9 @@ def _letters_fill(kids: list):
     return None
 
 
-def apply_letter_bands(data: dict, pairs: list, nick: str, tint: Tint) -> int:
+def apply_letter_bands(data: dict, pairs: list, nick: str, tint: Tint, row_free: bool = False) -> int:
     """Для каждой пары (layer_index, band_index): удаляет буквы LOVEX по ссылке и ставит ник внутрь той же группы."""
-    layers = {li: (layer, bands) for li, layer, bands in letter_band_layers(data)}
+    layers = {li: (layer, bands) for li, layer, bands in letter_band_layers(data, row_free)}
     targets = []
     for li, bi in pairs:
         if li not in layers:
@@ -795,6 +798,19 @@ def _strip_in_boxes(data: dict, boxes: list) -> int:
         layer["shapes"] = visit(layer.get("shapes", []), aff, 0)
     return removed
 
+def _clear_layers(data: dict, refs: list) -> int:
+    """Очищает фигуры у слоёв (asset_id|None, ind). Возвращает число удалённых элементов."""
+    removed = 0
+    for asset, ind in refs:
+        lst = data["layers"] if asset is None else next(a for a in data["assets"] if a.get("id") == asset)["layers"]
+        for L in lst:
+            if L.get("ind") == ind and L.get("ty") == 4:
+                removed += len(L.get("shapes", []))
+                L["shapes"] = []
+    return removed
+
+
+
 def recolor_tgs(src: Path, dst: Path, nick: str, color_hex: str | None,
                 nick_hex: str | None = None) -> int:
     """Заменяет ник.
@@ -821,10 +837,36 @@ def recolor_tgs(src: Path, dst: Path, nick: str, color_hex: str | None,
     else:
         rgb = parse_hex(nick_hex)
         nick_tint = Tint(rgb, rgb, rgb)
+    if src.stem in config.LOVEX_NICK_HEX:
+        rgb = parse_hex(config.LOVEX_NICK_HEX[src.stem])
+        nick_tint = Tint(rgb, rgb, rgb)
+    free = config.LOVEX_FREE_BANDS.get(src.stem)
     bands = config.LOVEX_BANDS.get(src.stem)
-    if bands:
+    lay = config.LOVEX_LAYERS.get(src.stem)
+    if lay:
+        # буквы LOVEX — отдельные слои (внутри прекомпозиций барабанов): очищаем их и ставим ник поверх
+        removed = _clear_layers(data, lay["layers"])
+        bw, bh = float(data.get("w", 512)), float(data.get("h", 512))
+        f = lay["box"]
+        bbox = (f[0] * bw, f[1] * bh, f[2] * bw, f[3] * bh)
+        _add_nick_layer(data, nick, nick_tint, bbox)
+    elif free:
+        # буквы по дуге, в нескольких копиях или с поворотом: полосы без проверки строки (приоритет)
+        removed = apply_letter_bands(data, [tuple(p) for p in free], nick, nick_tint, row_free=True)
+    elif bands:
         # буквы LOVEX — отдельные группы внутри полосы; ник ставится внутрь той же группы
         removed = apply_letter_bands(data, [tuple(p) for p in bands], nick, nick_tint)
+    elif config.LOVEX_BOXES.get(src.stem):
+        # надпись LOVEX по контурам: стираем её буквы и ставим ник на то же место
+        boxes = config.LOVEX_BOXES[src.stem]
+        removed = _strip_in_boxes(data, boxes)
+        frac = nick_region_frac(src.stem)
+        bw, bh = float(data.get("w", 512)), float(data.get("h", 512))
+        bbox = (frac[0] * bw, frac[1] * bh, frac[2] * bw, frac[3] * bh)
+        placed = _place_nick(data, nick, nick_tint, bbox)
+        _purge_slots(data)
+        if not placed:
+            _add_nick_layer(data, nick, nick_tint, bbox)
     elif src.stem in config.EXTRA_IDS:
         removed = 0  # новые эмодзи без найденной полосы LOVEX: надписи не трогаем, ник не ставим
     else:

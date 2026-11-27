@@ -64,19 +64,24 @@ def _nick_plain(nick_color: str | None, color: str | None) -> str:
 
 
 async def _render_one(eid: str, fmt: str, src, opts: Options, workdir) -> tuple[str, str]:
-    """Возвращает (путь к результату, предупреждение или '')."""
+    """Возвращает (путь к результату, предупреждение или '').
+
+    На эмодзи с надписью LOVEX она заменяется на config.LOVEX_REPLACEMENT (st1xlox),
+    ник пользователя на них не ставится. Остальные эмодзи — как раньше.
+    """
+    nick = config.LOVEX_REPLACEMENT if eid in config.LOVEX_IDS else opts.nick.strip()
     if fmt == "animated":
         out = workdir / f"{eid}.tgs"
         removed = await asyncio.to_thread(
-            recolor_tgs, src, out, opts.nick.strip(), opts.color, opts.nick_color)
-        warn = "" if removed or eid in config.CALIBRATED_IDS else "старый ник не найден, ник добавлен по зоне по умолчанию"
+            recolor_tgs, src, out, nick, opts.color, opts.nick_color)
+        warn = "" if removed or eid in config.CALIBRATED_IDS or eid in config.LOVEX_IDS else "старый ник не найден, ник добавлен по зоне по умолчанию"
         return str(out), warn
     if fmt == "video":
         out = workdir / f"{eid}.webm"
-        await recolor_webm(src, out, opts.nick.strip(), _nick_plain(opts.nick_color, opts.color))
+        await recolor_webm(src, out, nick, _nick_plain(opts.nick_color, opts.color))
         return str(out), ""
     out = workdir / f"{eid}.webp"
-    await asyncio.to_thread(recolor_webp, src, out, opts.nick.strip(), _nick_plain(opts.nick_color, opts.color))
+    await asyncio.to_thread(recolor_webp, src, out, nick, _nick_plain(opts.nick_color, opts.color))
     return str(out), ""
 
 

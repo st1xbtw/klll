@@ -7,7 +7,7 @@ from pathlib import Path
 from PIL import Image
 
 from . import config
-from .common import fit_font_size, find_font, make_tint, parse_hex, region_px
+from .common import fit_font_size, find_font, make_tint, nick_region_frac, parse_hex, region_bg, region_px
 
 SIZE = 100
 
@@ -35,7 +35,7 @@ def _esc_path(p: Path) -> str:
 async def recolor_webm(src: Path, dst: Path, nick: str, color_hex: str) -> None:
     """Меняет только ник: фон и рисунок эмодзи остаются как были."""
     tint = make_tint(parse_hex(color_hex))
-    x0, y0, x1, y1 = region_px(SIZE, SIZE)
+    x0, y0, x1, y1 = region_px(SIZE, SIZE, nick_region_frac(src.stem))
     fsize = fit_font_size(nick, x1 - x0 - 2, y1 - y0 - 2)
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
 
@@ -47,8 +47,7 @@ async def recolor_webm(src: Path, dst: Path, nick: str, color_hex: str) -> None:
     frame = await _first_frame(src)
     if frame is not None:
         rgb = frame.convert("RGB")
-        hist = rgb.crop((x0, y0, x1, y1)).getcolors(maxcolors=SIZE * SIZE) or [(0, (0, 0, 0))]
-        bg = max(hist)[1]
+        bg = region_bg(rgb, (x0, y0, x1, y1))
         drawbox = (
             f"drawbox=x={x0}:y={y0}:w={x1 - x0}:h={y1 - y0}:"
             f"color=0x{bg[0]:02X}{bg[1]:02X}{bg[2]:02X}:t=fill,"

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from collections import Counter
 from functools import lru_cache
 from pathlib import Path
 
@@ -146,8 +147,43 @@ def font_supports(text: str) -> bool:
     return all(ord(c) in cmap for c in text)
 
 
-def region_px(w: int, h: int) -> tuple[int, int, int, int]:
-    x0, y0, x1, y1 = config.NICK_REGION
+def nick_region_frac(eid: str) -> tuple[float, float, float, float]:
+    """Где менять надпись на эмодзи (доли кадра).
+
+    Для эмодзи с известными контурами LOVEX — прямоугольник, охватывающий эту надпись,
+    чтобы новый ник встал на её место. Для остальных — общая NICK_REGION.
+    """
+    if eid in config.LOVEX_NICK_FRAC:
+        return config.LOVEX_NICK_FRAC[eid]
+    boxes = config.LOVEX_BOXES.get(eid)
+    if boxes:
+        return (min(b[0] for b in boxes), min(b[1] for b in boxes),
+                max(b[2] for b in boxes), max(b[3] for b in boxes))
+    return config.NICK_REGION
+
+
+def region_bg(img, box: tuple[int, int, int, int]) -> tuple[int, int, int]:
+    """Цвет фона вокруг области ника: самый частый цвет на кольце в 2 px снаружи.
+
+    Внутри области может быть много букв (их цвет нельзя брать за фон), поэтому смотрим кольцо.
+    img — PIL-изображение в RGB.
+    """
+    x0, y0, x1, y1 = box
+    W, H = img.size
+    ring = []
+    for x in range(max(0, x0 - 2), min(W, x1 + 2)):
+        for y in range(max(0, y0 - 2), min(H, y1 + 2)):
+            if x0 <= x < x1 and y0 <= y < y1:
+                continue
+            ring.append(img.getpixel((x, y)))
+    if ring:
+        return Counter(ring).most_common(1)[0][0]
+    hist = img.crop(box).getcolors(maxcolors=W * H) or [(0, (0, 0, 0))]
+    return max(hist)[1]
+
+
+def region_px(w: int, h: int, frac: tuple | None = None) -> tuple[int, int, int, int]:
+    x0, y0, x1, y1 = frac or config.NICK_REGION
     return round(x0 * w), round(y0 * h), round(x1 * w), round(y1 * h)
 
 

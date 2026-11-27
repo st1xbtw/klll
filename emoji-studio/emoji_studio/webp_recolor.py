@@ -5,7 +5,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 from . import config
-from .common import fit_font_size, find_font, make_tint, parse_hex, region_px
+from .common import fit_font_size, find_font, make_tint, nick_region_frac, parse_hex, region_bg, region_px
 
 SIZE = 100
 SS = 4  # суперсэмплинг для текста
@@ -15,13 +15,12 @@ def recolor_webp(src: Path, dst: Path, nick: str, color_hex: str) -> None:
     """Меняет только ник: фон и рисунок эмодзи остаются как были."""
     tint = make_tint(parse_hex(color_hex))
     img = Image.open(src).convert("RGBA").resize((SIZE, SIZE), Image.LANCZOS)
-    x0, y0, x1, y1 = region_px(SIZE, SIZE)
+    x0, y0, x1, y1 = region_px(SIZE, SIZE, nick_region_frac(src.stem))
     alpha = img.getchannel("A")
 
     # стираем старый ник: заливаем область ника фоном, который уже есть у эмодзи
     rgb = img.convert("RGB")
-    hist = rgb.crop((x0, y0, x1, y1)).getcolors(maxcolors=SIZE * SIZE) or [(0, (0, 0, 0))]
-    bg = max(hist)[1]
+    bg = region_bg(rgb, (x0, y0, x1, y1))
     base = img.copy()
     ImageDraw.Draw(base).rectangle((x0, y0, x1 - 1, y1 - 1), fill=(*bg, 255))
     base.putalpha(alpha)
