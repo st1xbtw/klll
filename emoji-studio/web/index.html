@@ -60,6 +60,7 @@ button { cursor: pointer; }
 }
 .themepill button.active { background: linear-gradient(135deg, #5aa2ff, #3d6dff); color: #fff; box-shadow: 0 0 20px rgba(80, 150, 255, .7); }
 .winbar button:hover { background: rgba(255, 255, 255, .14); }
+body.browser .winbar { display: none; }
 .winbar button.close:hover { background: #e5485d; color: #fff; }
 
 /* боковая панель */
@@ -480,6 +481,11 @@ $("themeDark").onclick = () => applyTheme("dark");
 applyTheme(localStorage.getItem("es-theme") || "dark");
 
 /* ───── окно ───── */
+/* В браузере нет окна pywebview: кнопки окна скрываем и шлём пинги, чтобы сервер знал, что вкладка открыта. */
+if (!window.pywebview) {
+  document.body.classList.add("browser");
+  setInterval(() => fetch("/api/ping").catch(() => {}), 5000);
+}
 [["winMin", "minimize"], ["winMax", "maximize"], ["winClose", "close"]].forEach(([id, action]) => {
   $(id).onclick = () => api("/api/window", { method: "POST", headers: JSON_HDR, body: JSON.stringify({ action }) }).catch(() => {});
 });

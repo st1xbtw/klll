@@ -14,6 +14,7 @@ import socket
 import subprocess
 import sys
 import threading
+import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -150,6 +151,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+        elif path == "/api/ping":
+            LAST_PING[0] = time.time()
+            self._json(200, {"ok": True})
         elif path == "/api/state":
             self._json(200, state())
         elif path == "/api/fonts":
@@ -335,6 +339,23 @@ def list_packs() -> list[dict]:
     return out
 
 
+# Режим по умолчанию — браузер. Окно pywebview включается переменной EMOJI_STUDIO_WINDOW=1.
+LAST_PING = [0.0]
+
+
+def _watch_browser(server: ThreadingHTTPServer) -> None:
+    """Браузерный режим: если вкладку закрыли (пингов нет 30 с), останавливаем сервер."""
+    started = time.time()
+    while True:
+        time.sleep(5)
+        now = time.time()
+        if LAST_PING[0] and now - LAST_PING[0] > 30:
+            break
+        if not LAST_PING[0] and now - started > 90:
+            break
+    server.shutdown()
+
+
 class WindowApi:
     """Кнопки окна в шапке. Работают только в окне pywebview."""
 
@@ -366,13 +387,17 @@ def pick_server() -> ThreadingHTTPServer:
 def main() -> None:
     server = pick_server()
     url = f"http://127.0.0.1:{server.server_address[1]}/"
-    try:
-        import webview  # pywebview: отдельное окно приложения (WebView2 на Windows)
-    except Exception:  # noqa: BLE001 — нет webview: откроем в браузере
-        webview = None
+    webview = None
+    if os.environ.get("EMOJI_STUDIO_WINDOW") == "1":
+        try:
+            import webview  # pywebview: отдельное окно (WebView2 на Windows)
+        except Exception:  # noqa: BLE001 — нет webview: откроем в браузере
+            webview = None
     if webview is None:
-        print(f"Lunary Emoji запущен: {url}\nДля выхода нажмите Ctrl+C.")
+        if sys.stdout:  # в сборке без консоли stdout отсутствует
+            print(f"Lunary Emoji запущен: {url}\nДля выхода закройте вкладку или нажмите Ctrl+C.")
         threading.Timer(0.8, lambda: webbrowser.open(url)).start()
+        threading.Thread(target=_watch_browser, args=(server,), daemon=True).start()
         try:
             server.serve_forever()
         except KeyboardInterrupt:
