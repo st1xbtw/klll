@@ -86,7 +86,7 @@ button { cursor: pointer; }
 /* центр */
 .main { grid-column: 2; grid-row: 2; position: relative; min-height: 0; display: flex; flex-direction: column; }
 /* кот держится лапами за верхний край панели: целиком виден, лапы лежат на рамке */
-.mascot-peek { position: absolute; top: -70px; left: 50%; transform: translateX(-50%); width: 150px; pointer-events: none; z-index: 3; filter: drop-shadow(0 8px 14px rgba(0, 20, 90, .35)); }
+.mascot-peek { position: absolute; top: -88px; left: 50%; transform: translateX(-50%); width: 150px; pointer-events: none; z-index: 3; filter: drop-shadow(0 8px 14px rgba(0, 20, 90, .35)); }
 .panel { padding: 26px 28px 22px; overflow: auto; min-height: 0; flex: 1; }
 .panel h2 { margin: 4px 0 16px; font-size: 24px; }
 .step { display: flex; align-items: center; gap: 12px; margin: 22px 0 12px; font-weight: 700; font-size: 18px; }
@@ -220,7 +220,6 @@ button { cursor: pointer; }
 }
 .stage img, .stage video, .stage .lottie { position: relative; max-width: 86%; max-height: 86%; object-fit: contain; filter: drop-shadow(0 16px 24px rgba(0, 12, 70, .5)); }
 .stage .lottie { width: 280px; height: 280px; }
-.stage-hint { position: relative; text-align: center; font-size: 20px; font-weight: 600; line-height: 1.45; color: var(--text); opacity: .9; }
 @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
 .stage .caption {
   position: absolute; left: 12px; right: 12px; bottom: 12px; text-align: center; font-size: 13px; color: var(--text);
@@ -288,9 +287,9 @@ button { cursor: pointer; }
       <button data-view="about"><span class="ic">ⓘ</span>О приложении</button>
     </nav>
     <div class="grow"></div>
-    <a class="botcard" id="botLink" href="#" target="_blank">
+    <a class="botcard" id="botLink" href="https://t.me/LunaryEmojiBot" target="_blank" rel="noopener">
       <div class="tg">➤</div>
-      <div><b>Telegram-бот</b><small id="botName">имя не задано</small></div>
+      <div><b>Telegram-бот</b><small>Telegram Bot</small></div>
     </a>
   </aside>
 
@@ -335,7 +334,7 @@ button { cursor: pointer; }
       <div class="nickcolors" id="nickSw"></div>
       <div class="note">Цвет текста ника: «Оригинал» берёт цвет букв из исходника, остальные цвета применяются ко всем буквам.</div>
 
-      <div class="step"><span class="n">3</span>Выбор эмодзи <span class="hint" id="calNote"></span></div>
+      <div class="step"><span class="n">3</span>Выбор эмодзи</div>
       <div class="picker-bar">
         <div class="seg">
           <button class="primary" id="selAll">Выбрать все</button>
@@ -428,7 +427,6 @@ button { cursor: pointer; }
     <div class="glass preview">
       <div class="head">Предпросмотр <span class="sp"></span><span class="tag" id="pvTag">готово к созданию</span></div>
       <div class="stage" id="stage">
-        <div id="stageHint" class="stage-hint">Для начала выберете<br>понравившийся эмодзи</div>
         <img id="pvImg" class="hidden" alt="">
         <video id="pvVid" class="hidden" autoplay loop muted playsinline></video>
         <div id="pvAnim" class="lottie hidden"></div>
@@ -502,8 +500,6 @@ $("goSettings").onclick = (e) => { e.preventDefault(); showView("settings"); };
 async function loadState() {
   STATE = await api("/api/state");
   $("botUsername").value = STATE.bot_username || "";
-  $("botName").textContent = STATE.bot_username ? "@" + STATE.bot_username + " →" : "имя не задано";
-  $("botLink").href = STATE.bot_username ? "https://t.me/" + STATE.bot_username : "#";
   $("botToken").placeholder = STATE.has_token ? "Токен сохранён (введите новый, чтобы заменить)" : "123456:ABC…";
   $("readyCount").innerHTML = `<b>${STATE.ready_count}</b> из ${STATE.total} доступно`;
   $("emptyBox").classList.toggle("hidden", STATE.ready_count > 0);
@@ -648,7 +644,6 @@ function renderPicker() {
   grid.innerHTML = "";
   const cal = STATE.sources.filter((s) => s.ready && s.calibrated).length;
   const uncal = STATE.sources.filter((s) => s.ready && !s.calibrated).length;
-  $("calNote").textContent = uncal ? `${cal} откалиброваны · ${uncal} без калибровки` : (cal ? `все ${cal} откалиброваны` : "");
   STATE.sources.forEach((s) => {
     const tile = document.createElement("label");
     tile.className = "tile" + (s.ready ? " on" : " off");
@@ -667,8 +662,8 @@ function renderPicker() {
     id.textContent = s.id;
     id.title = s.id;
     const kind = document.createElement("div");
-    kind.className = "kind" + (s.ready && !s.calibrated ? " warn" : "");
-    kind.textContent = !s.ready ? "нет исходника" : ({ animated: "TGS", video: "WEBM", static: "WEBP" }[s.fmt] + (s.calibrated ? "" : " · без калиб."));
+    kind.className = "kind";
+    kind.textContent = !s.ready ? "нет исходника" : ({ animated: "TGS", video: "WEBM", static: "WEBP" }[s.fmt] || "");
     tile.append(cb, makePreview(s), mark, id, kind);
     grid.appendChild(tile);
   });
@@ -844,7 +839,6 @@ $("gen").onclick = async () => {
 function showResult(dir, fileName) {
   const url = `/api/preview?dir=${encodeURIComponent(dir)}&file=${encodeURIComponent(fileName)}`;
   ["pvImg", "pvVid", "pvAnim"].forEach((id) => $(id).classList.add("hidden"));
-  $("stageHint").classList.add("hidden");
   $("pvAnim").innerHTML = "";
   $("pvHint").textContent = fileName;
   $("pvTag").textContent = "результат";
