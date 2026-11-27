@@ -39,7 +39,6 @@ button { cursor: pointer; }
 .hidden { display: none !important; }
 .glass {
   background: var(--glass); border: 1px solid var(--line); border-radius: 26px;
-  backdrop-filter: blur(10px) saturate(130%); -webkit-backdrop-filter: blur(10px) saturate(130%);
   box-shadow: var(--shadow);
 }
 
@@ -163,6 +162,7 @@ button { cursor: pointer; }
 .note { color: var(--muted); font-size: 13px; margin-top: 10px; }
 .grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
 .tile {
+  content-visibility: auto; contain-intrinsic-size: 118px 118px; contain: layout paint style;
   position: relative; border-radius: 16px; background: var(--tile); border: 1px solid var(--line);
   padding: 6px 4px 5px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0;
 }
@@ -220,11 +220,11 @@ button { cursor: pointer; }
 }
 .stage img, .stage video, .stage .lottie { position: relative; max-width: 86%; max-height: 86%; object-fit: contain; filter: drop-shadow(0 16px 24px rgba(0, 12, 70, .5)); }
 .stage .lottie { width: 280px; height: 280px; }
-.stage #pvDefault { animation: float 4s ease-in-out infinite; max-width: 70%; filter: drop-shadow(0 10px 18px rgba(0, 12, 70, .35)); opacity: .92; }
+.stage-hint { position: relative; text-align: center; font-size: 20px; font-weight: 600; line-height: 1.45; color: var(--text); opacity: .9; }
 @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
 .stage .caption {
   position: absolute; left: 12px; right: 12px; bottom: 12px; text-align: center; font-size: 13px; color: var(--text);
-  background: var(--glass2); border: 1px solid var(--line); border-radius: 14px; padding: 8px 10px; backdrop-filter: blur(8px);
+  background: var(--glass2); border: 1px solid var(--line); border-radius: 14px; padding: 8px 10px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .done { padding: 20px; text-align: center; }
@@ -428,7 +428,7 @@ button { cursor: pointer; }
     <div class="glass preview">
       <div class="head">Предпросмотр <span class="sp"></span><span class="tag" id="pvTag">готово к созданию</span></div>
       <div class="stage" id="stage">
-        <img id="pvDefault" src="/assets/preview_cat.png" alt="">
+        <div id="stageHint" class="stage-hint">Для начала выберете<br>понравившийся эмодзи</div>
         <img id="pvImg" class="hidden" alt="">
         <video id="pvVid" class="hidden" autoplay loop muted playsinline></video>
         <div id="pvAnim" class="lottie hidden"></div>
@@ -843,7 +843,8 @@ $("gen").onclick = async () => {
 
 function showResult(dir, fileName) {
   const url = `/api/preview?dir=${encodeURIComponent(dir)}&file=${encodeURIComponent(fileName)}`;
-  ["pvImg", "pvVid", "pvAnim", "pvDefault"].forEach((id) => $(id).classList.add("hidden"));
+  ["pvImg", "pvVid", "pvAnim"].forEach((id) => $(id).classList.add("hidden"));
+  $("stageHint").classList.add("hidden");
   $("pvAnim").innerHTML = "";
   $("pvHint").textContent = fileName;
   $("pvTag").textContent = "результат";
